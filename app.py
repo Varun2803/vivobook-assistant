@@ -606,14 +606,6 @@ if docs:
     active_docs = docs if model_filter == "All indexed models" else [
         doc for doc in docs if doc.get("model", doc["source"]) == model_filter
     ]
-    st.caption(f"Search scope: **{model_filter}**")
-    status_cols = st.columns(3)
-    with status_cols[0]:
-        st.metric("Searchable passages", f"{len(active_docs):,}")
-    with status_cols[1]:
-        st.metric("Model families", f"{len(available_models)}")
-    with status_cols[2]:
-        st.metric("Answer mode", "Manual grounded")
     st.subheader("Product catalog")
     if st.toggle("Browse model photos and buying details", value=False, key="show_product_catalog"):
         products = load_products()
