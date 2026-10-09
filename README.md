@@ -1,39 +1,62 @@
 # VivoBook Manual Assistant
 
-A local RAG chatbot for ASUS VivoBook manuals. It extracts pages from PDF manuals, splits them into overlapping passages, searches with BM25, and answers with supporting page references. If Ollama is running locally, the app can synthesize a conversational answer; otherwise it uses an extractive answer.
+A Streamlit RAG assistant for ASUS VivoBook manuals. It extracts PDF text by page, splits at paragraph and section boundaries, indexes passages with BM25, and produces answers with page citations. Local Ollama generation is optional; without it, the app returns a concise extractive answer grounded in retrieved passages.
 
-## Run it
+## Audit summary and architecture
+
+The existing app already used manual passages and lexical search, so this update preserves that architecture rather than adding an unmeasured embedding model or vector database. It was not a neural embedding pipeline: it is a genuine lexical retrieval-augmented assistant. The former code rebuilt BM25 corpus statistics on every query, allowed weak topic-only matches, showed no sources by default, stored browser uploads in a shared local folder, and could overwrite the bundle with an empty index after a failed rebuild. Exact duplicate passages were also repeated across manuals.
+
+The current flow is PDF bytes → per-page text extraction and section-aware chunks → session-cached BM25 index → model-code filtering, relevance checks, deduplication → bounded retrieved context → optional Ollama synthesis or extractive answer → citations with expandable source pages.
+
+### What changed
+
+- `rag_core.py` contains PDF extraction, page/section metadata, 220-word chunks with 40-word overlap, content/config fingerprints, cached extraction, safe index writes, duplicate collapse, BM25 ranking, model-code filters, bounded prompt context, citation validation, and Ollama fallback handling.
+- BM25 tokenization and document frequencies are built once per Streamlit session/index version, not for each question. Exact duplicate passages are collapsed while their distinct source/page references remain available.
+- Retrieval has configurable top-k and minimum score, direct-term coverage checks, model-code scoping, query aliases, and boilerplate filtering. No embedding model, FAISS, Chroma, or reranker is installed: for this 973-passage corpus, they add model download/deployment cost without a measured benefit.
+- PDF extraction preserves source filename, physical page number, model identifier, and a detected section heading. Empty pages are skipped; page-level extraction errors do not discard other pages. Ingestion is cached by PDF SHA-256 plus chunker settings. Failed or absent PDFs do not wipe the existing index; unrelated manuals are retained on incremental rebuilds.
+- Browser uploads are bounded to 25 MB per file and 50 MB per session and remain only in that Streamlit session. They are not persisted or put in a process-global cache.
+- Chat history is capped, only recent turns are passed as reference-resolution context, and history is explicitly not evidence. Answers retain citations and show document/page details in the expandable Sources control.
+- User-facing generation errors are bounded and fall back to extracted manual text. No secrets are embedded in source.
+
+## Run locally
 
 ```powershell
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Deploy and share a link
+Optional settings (environment variables or Streamlit secrets):
 
-This app can be hosted on [Streamlit Community Cloud](https://share.streamlit.io/). Upload the project to a GitHub repository, then create an app using `app.py` as the entrypoint. Keep `requirements.txt`, `.streamlit/config.toml`, `data/laptops.json`, and the pre-indexed manual passages under `data/packed_chunks/` in the repository so the hosted app can answer questions without processing the PDFs at startup. For local use, the original PDFs can stay under `data/manuals/`; the app can rebuild its index from them. Do not upload `.venv/`, `logs/`, or secrets. After deployment, share the `*.streamlit.app` URL; the local `127.0.0.1` URL only works on the computer running the app.
+| Name | Default | Purpose |
+|---|---|---|
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama-compatible generation endpoint |
+| `OLLAMA_MODEL` | `llama3.2` | Installed model name |
+| `OLLAMA_TIMEOUT_SEC` | `3` | Generation request timeout |
+| `RAG_TOP_K` | `5` | Retrieved passages, bounded to 1–10 |
+| `RAG_MIN_SCORE` | `1.0` | Minimum lexical relevance score |
 
-The optional Ollama integration uses a local service and will not be available on Community Cloud unless you configure a separately hosted model endpoint. Manual retrieval and the extractive fallback work without Ollama.
+Install Ollama and pull the selected model to enable local generation. A hosted Streamlit Cloud app cannot access your computer’s localhost; configure a reachable compatible endpoint only if you want generation in the hosted app. Manual retrieval and extractive answers work without credentials.
 
-The included English manuals cover these model families:
+## Tests and evaluation
 
-- E25357: VivoBook X1404, X1504, X1704
-- E25362: VivoBook X1405, X1505, X1605
-- E25361: VivoBook M1605YA
-- E25372: VivoBook Go 15 E510
-- E19281: VivoBook Flip 14 TP401
-- E15273: VivoBook X412, X512
-- E25354: VivoBook S14/S15/S16 (S5406/S5506/S5606 family)
+Run the offline suite with:
 
-Manuals are sourced from ASUS support downloads. The exact models covered are also shown in the model selector. ASUS has many VivoBook generations and hardware variants, so this collection cannot represent every VivoBook ever sold. Add an English manual PDF in the sidebar for a specific model family; keep its model number in the filename, then choose **Save and index manuals**.
+```powershell
+python -m unittest discover -s tests -v
+```
 
-## Optional local answer generation
+`tests/retrieval_eval.json` contains 35 representative questions (30 answerable, 5 intentionally unsupported) with expected source pages and fact snippets. Retrieval Recall@5 is checked against the bundled `data/chunks.json`. This is a small deterministic manual set, not a broad human correctness study; answer faithfulness for generated Ollama prose is guarded by citation/support checks, but no model-based evaluation is claimed. Embedding generation tests are not applicable because the architecture intentionally uses BM25 and has no embedding model.
 
-Install [Ollama](https://ollama.com/), pull a model such as `llama3.2`, and start its local service. The app uses `http://localhost:11434` and model `llama3.2` by default. Override with `OLLAMA_HOST` and `OLLAMA_MODEL`. Without Ollama, retrieval and page citations still work.
+## Streamlit Community Cloud deployment
 
-## Notes
+1. Push the repository to GitHub with `app.py`, `rag_core.py`, `requirements.txt`, `.streamlit/config.toml`, `data/laptops.json`, and `data/packed_chunks/`.
+2. In Streamlit Community Cloud, create an app from the repository and set `app.py` as the entrypoint.
+3. No secret is required for manual retrieval. If using a hosted Ollama-compatible service, add `OLLAMA_HOST` and `OLLAMA_MODEL` through the app’s Secrets settings; do not commit `secrets.toml`.
+4. After deploy, share the `*.streamlit.app` URL. `127.0.0.1` works only on the local computer.
 
-- This is retrieval augmented generation, not a newly trained foundation model.
-- Use the manual matching the full model suffix printed on the laptop; features vary by configuration.
-- Retrieval uses lexical BM25 and works without paid APIs or GPU setup.
+### Persistence and limits
+
+Community Cloud local files may be replaced on restart/redeploy. Keep the bundled packed index in the repository; do not rely on runtime local writes for persistent manuals. User-uploaded manuals are session-scoped and disappear when that session ends. The bundled manuals cover seven families, not every VivoBook generation. Scanned/image-only PDFs require OCR, which is not included. Hardware specifications vary by full model/SKU. This project has not undergone a security audit and should not be described as production-secure.
 
