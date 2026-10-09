@@ -79,6 +79,21 @@ class RetrievalTests(unittest.TestCase):
         self.assertTrue(all("X1605" in hit["model"] for _, hit in results))
         self.assertEqual(rag_core.retrieve("How do I pair Bluetooth on X1700?", self.index), [])
 
+    def test_duplicate_passage_keeps_exact_model_filter_and_citation(self) -> None:
+        text = "This notebook operates in ambient temperatures between 5 C and 35 C."
+        index = rag_core.build_search_index([
+            {"text": text, "source": "tp401_manual.pdf", "model": "TP401", "page": 9},
+            {"text": text, "source": "go_e510_manual.pdf", "model": "E510", "page": 9},
+        ])
+        hits = rag_core.retrieve("What ambient temperatures can E510 operate within?", index)
+        self.assertTrue(hits)
+        refs = hits[0][1]["source_refs"]
+        self.assertEqual({ref["source"] for ref in refs}, {"go_e510_manual.pdf"})
+        self.assertEqual(hits[0][1]["source"], "go_e510_manual.pdf")
+
+    def test_unknown_error_code_does_not_retrieve_generic_passages(self) -> None:
+        self.assertEqual(rag_core.retrieve("What does error code E9999 mean?", self.index), [])
+
     def test_top_k_is_configurable_and_unrelated_queries_abstain(self) -> None:
         self.assertLessEqual(len(rag_core.retrieve("BIOS POST", self.index, top_k=1)), 1)
         self.assertEqual(rag_core.retrieve("current retail price of X1504", self.index), [])
@@ -219,24 +234,97 @@ class RetrievalEvaluationTests(unittest.TestCase):
 
     def test_recall_at_five_for_grounded_questions(self) -> None:
         answerable = [case for case in self.cases if case["answerable"]]
-        matched = []
+        query_recalls = []
+        missed = []
         for case in answerable:
-            hits = rag_core.retrieve(case["question"], self.index, top_k=5, min_score=0.75)
-            found = any(
-                ref.get("source") == case["source"]
-                and ref.get("page") in case["pages"]
-                and case["fact"].casefold() in hit["text"].casefold()
-                for _, hit in hits
-                for ref in hit.get("source_refs", [])
-            )
-            matched.append(found)
-        recall_at_five = sum(matched) / len(answerable)
-        self.assertGreaterEqual(recall_at_five, 0.75, f"Recall@5={recall_at_five:.3f}; misses={[c['question'] for c, ok in zip(answerable, matched) if not ok]}")
+            hits = rag_core.retrieve(case["question"], self.index, top_k=5, min_score=1.0)
+            labels = case.get("relevant_passages", [{
+                "source": case["source"], "pages": case["pages"], "fact": case["fact"],
+            }])
+            found = []
+            for label in labels:
+                found.append(any(
+                    label["fact"].casefold() in hit["text"].casefold()
+                    and any(ref.get("source") == label["source"] and ref.get("page") in label["pages"]
+                            for ref in hit.get("source_refs", []))
+                    for _, hit in hits
+                ))
+            query_recalls.append(sum(found) / len(labels))
+            if not all(found):
+                missed.append(case["question"])
+        recall_at_five = sum(query_recalls) / len(query_recalls)
+        self.assertGreaterEqual(recall_at_five, 0.99, f"Recall@5={recall_at_five:.3f}; misses={missed}")
+
+    def test_recall_at_one_three_and_mrr_regression_targets(self) -> None:
+        answerable = [case for case in self.cases if case["answerable"]]
+        recalls = {k: [] for k in (1, 3)}
+        reciprocal_ranks = []
+        for case in answerable:
+            labels = case.get("relevant_passages", [{
+                "source": case["source"], "pages": case["pages"], "fact": case["fact"],
+            }])
+            ranked = rag_core.retrieve(case["question"], self.index, top_k=50, min_score=1.0)
+            label_ranks = []
+            for label in labels:
+                rank = next((i for i, (_, hit) in enumerate(ranked, 1) if
+                    label["fact"].casefold() in hit["text"].casefold()
+                    and any(ref.get("source") == label["source"] and ref.get("page") in label["pages"]
+                            for ref in hit.get("source_refs", []))), None)
+                if rank:
+                    label_ranks.append(rank)
+            first_rank = min(label_ranks) if label_ranks else None
+            reciprocal_ranks.append(1 / first_rank if first_rank else 0)
+            for k in recalls:
+                recalls[k].append(sum(rank <= k for rank in label_ranks) / len(labels))
+        self.assertGreaterEqual(sum(recalls[1]) / len(answerable), 0.75)
+        self.assertGreaterEqual(sum(recalls[3]) / len(answerable), 0.90)
+        self.assertGreaterEqual(sum(reciprocal_ranks) / len(answerable), 0.85)
+
+    def test_every_answerable_ground_truth_fact_exists_on_its_page(self) -> None:
+        for case in self.cases:
+            if not case["answerable"]:
+                continue
+            labels = case.get("relevant_passages", [{
+                "source": case["source"], "pages": case["pages"], "fact": case["fact"],
+            }])
+            for label in labels:
+                self.assertTrue(any(
+                    doc.get("source") == label["source"]
+                    and doc.get("page") in label["pages"]
+                    and label["fact"].casefold() in doc.get("text", "").casefold()
+                    for doc in self.docs
+                ), f"Invalid source/page/fact annotation for: {case['question']}")
+
+    def test_targeted_battery_passages_survive_relevance_filter(self) -> None:
+        for question, expected_page in (
+            ("What TP401 battery charging precautions are listed?", 12),
+            ("How often should the TP401 battery be recharged when unused for long periods?", 13),
+        ):
+            with self.subTest(question=question):
+                hits = rag_core.retrieve(question, self.index, top_k=5, min_score=1.0)
+                self.assertTrue(any(
+                    hit.get("page") == expected_page
+                    and hit.get("source", "").endswith("TP401_E19281_EN.pdf")
+                    for _, hit in hits
+                ))
+
+    def test_bios_update_question_retrieves_both_supporting_pages(self) -> None:
+        hits = rag_core.retrieve(
+            "How do I update BIOS on TP401 using a USB flash disk?",
+            self.index, top_k=5, min_score=1.0,
+        )
+        pages = {hit.get("page") for _, hit in hits if hit.get("source", "").endswith("TP401_E19281_EN.pdf")}
+        self.assertTrue({86, 87}.issubset(pages))
 
     def test_unsupported_cases_have_no_expected_answer_text(self) -> None:
         for case in self.cases:
             if not case["answerable"]:
                 self.assertNotIn("fact", case)
+                self.assertEqual(
+                    rag_core.retrieve(case["question"], self.index, top_k=5, min_score=1.0),
+                    [],
+                    case["question"],
+                )
 
 
 if __name__ == "__main__":
