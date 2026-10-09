@@ -1,0 +1,567 @@
+from __future__ import annotations
+
+import json
+import math
+import os
+import re
+import base64
+import gzip
+from collections import Counter
+from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
+
+import streamlit as st
+from pypdf import PdfReader
+
+
+DATA_DIR = Path(__file__).parent / "data" / "manuals"
+INDEX_PATH = Path(__file__).parent / "data" / "chunks.json"
+PACKED_INDEX_DIR = Path(__file__).parent / "data" / "packed_chunks"
+PRODUCTS_PATH = Path(__file__).parent / "data" / "laptops.json"
+TOKEN_RE = re.compile(r"[a-z]+[0-9]+[a-z0-9]*|[0-9]+[a-z]+[a-z0-9]*|[a-z]+", re.I)
+STOP_WORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "by", "can", "could", "do", "does",
+    "for", "from", "how", "i", "in", "is", "it", "me", "my", "of", "on", "or",
+    "laptop", "notebook", "pc", "please", "should", "the", "this", "to", "what", "when",
+    "where", "which", "who", "why", "with", "would", "you", "your", "used",
+    "tell", "show", "give", "vivobook",
+}
+QUERY_EXPANSIONS = {
+    "charge": {"charging", "charged", "charger", "battery", "adapter", "power"},
+    "charging": {"charge", "charged", "charger", "battery", "adapter", "power"},
+    "battery": {"charge", "charging", "charger", "adapter"},
+    "charger": {"charge", "charging", "battery", "adapter", "power"},
+}
+ACTION_HINTS = {
+    "charge": {"adapter", "insert", "connect", "plug", "port", "input", "outlet"},
+    "charging": {"adapter", "insert", "connect", "plug", "port", "input", "outlet"},
+    "battery": {"adapter", "insert", "connect", "plug", "port", "input", "outlet"},
+}
+TOPIC_GROUPS = (
+    {"processor", "processors", "cpu", "chipset", "soc"},
+    {"memory", "ram"},
+    {"storage", "ssd", "hdd", "drive"},
+    {"battery", "capacity"},
+    {"screen", "display", "resolution"},
+    {"charger", "adapter", "charging", "charge", "power"},
+    {"keyboard", "key", "shortcut", "hotkey", "function", "fn"},
+    {"touchpad", "trackpad"},
+    {"wifi", "wireless", "wlan", "bluetooth", "network"},
+    {"camera", "webcam"},
+    {"microphone", "speaker", "audio"},
+)
+
+
+def query_anchors(query: str) -> set[str]:
+    terms = set(tokens(query))
+    matched_groups = [group for group in TOPIC_GROUPS if terms & group]
+    if matched_groups:
+        return set().union(*matched_groups)
+    # Ignore model codes: they identify the corpus scope but do not establish
+    # that a passage answers the user's actual question.
+    return {term for term in terms if len(term) > 2 and not re.fullmatch(r"(?:\d+[a-z]*|[a-z]\d+[a-z]*)", term)}
+
+
+@st.cache_data
+def load_products() -> list[dict]:
+    if not PRODUCTS_PATH.exists():
+        return []
+    return json.loads(PRODUCTS_PATH.read_text(encoding="utf-8"))
+
+
+def show_product_card(product: dict) -> None:
+    with st.container(border=True):
+        st.markdown(f"### {product['name']}")
+        st.caption(product.get("sku", "Representative model"))
+        st.markdown(
+            f'<div class="product-photo"><img src="{product["image"]}" alt="{product["name"]}" loading="lazy"></div>',
+            unsafe_allow_html=True,
+        )
+        specs = product.get("specs", [])
+        if specs:
+            st.markdown("  ".join(f"**{label}:** {value}  ·" for label, value in specs))
+        if product.get("price"):
+            st.markdown(f"**{product['price']}**  ·  {product.get('rating', 'Rating unavailable')}")
+        st.caption(product.get("price_note", "Specifications vary by exact configuration. Check the listing for current availability and price."))
+        st.link_button("View product listing", product["url"], use_container_width=True)
+
+
+def tokens(text: str) -> list[str]:
+    words = []
+    for word in TOKEN_RE.findall(text.lower()):
+        if word in STOP_WORDS:
+            continue
+        if word.endswith("ies") and len(word) > 4:
+            word = word[:-3] + "y"
+        elif word.endswith("s") and not word.endswith(("ss", "us", "is")) and len(word) > 3:
+            word = word[:-1]
+        if word not in STOP_WORDS and len(word) > 1:
+            words.append(word)
+    return words
+
+
+def query_terms(query: str) -> set[str]:
+    terms = set(tokens(query))
+    for term in tuple(terms):
+        terms.update(QUERY_EXPANSIONS.get(term, set()))
+    return terms
+
+
+def weighted_query_terms(query: str) -> dict[str, float]:
+    direct = set(tokens(query))
+    weights = {term: 3.0 for term in direct}
+    for term in direct:
+        for expanded in QUERY_EXPANSIONS.get(term, set()):
+            weights.setdefault(expanded, 0.8)
+        for hint in ACTION_HINTS.get(term, set()):
+            weights.setdefault(hint, 1.2)
+    for group in TOPIC_GROUPS:
+        if direct & group:
+            for alias in group:
+                weights.setdefault(alias, 0.8)
+    return weights
+
+
+def split_text(text: str, size: int = 150, overlap: int = 30) -> list[str]:
+    words = text.split()
+    if not words:
+        return []
+    chunks = []
+    step = max(1, size - overlap)
+    for start in range(0, len(words), step):
+        chunk = " ".join(words[start:start + size]).strip()
+        if chunk:
+            chunks.append(chunk)
+        if start + size >= len(words):
+            break
+    return chunks
+
+
+def extract_pdf(pdf_path: Path) -> list[dict]:
+    reader = PdfReader(str(pdf_path))
+    lower_name = pdf_path.name.lower()
+    if "x1504" in lower_name:
+        model = "Vivobook 15 X1504 / 14 X1404 / 17 X1704 (E25357)"
+    elif "x1405" in lower_name:
+        model = "Vivobook 16X X1605 / 14 X1405 / 15 X1505 (E25362)"
+    elif "m1605" in lower_name:
+        model = "Vivobook 16 M1605YA (E25361)"
+    elif "e510" in lower_name:
+        model = "Vivobook Go 15 E510 (E25372)"
+    elif "tp401" in lower_name:
+        model = "Vivobook Flip 14 TP401 (E19281)"
+    elif "x412" in lower_name or "x512" in lower_name:
+        model = "Vivobook X412 / X512 (E15273)"
+    elif "s5406" in lower_name:
+        model = "Vivobook S 14 / S 15 / S 16 (S5406 / S5506 / S5606, E25354)"
+    else:
+        model = pdf_path.stem
+    docs = []
+    for page_num, page in enumerate(reader.pages, start=1):
+        text = (page.extract_text() or "").strip()
+        for part, chunk in enumerate(split_text(text)):
+            docs.append({"text": chunk, "source": pdf_path.name, "model": model, "page": page_num, "part": part})
+    return docs
+
+
+def rebuild_index() -> list[dict]:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    chunks = []
+    for pdf_path in sorted(DATA_DIR.glob("*.pdf")):
+        try:
+            chunks.extend(extract_pdf(pdf_path))
+        except Exception as exc:
+            st.warning(f"Could not read {pdf_path.name}: {exc}")
+    INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
+    INDEX_PATH.write_text(json.dumps(chunks, ensure_ascii=False, indent=2), encoding="utf-8")
+    return chunks
+
+
+@st.cache_data
+def load_index() -> list[dict]:
+    try:
+        if INDEX_PATH.exists():
+            return json.loads(INDEX_PATH.read_text(encoding="utf-8"))
+        # A compact, split Base64 gzip snapshot keeps the pre-indexed manuals
+        # available on hosts where the original PDFs are too large to bundle.
+        parts = sorted(PACKED_INDEX_DIR.glob("*.b64"))
+        if parts:
+            encoded = "".join(part.read_text(encoding="ascii").strip() for part in parts)
+            compressed = base64.b64decode(encoded, validate=True)
+            return json.loads(gzip.decompress(compressed).decode("utf-8"))
+    except (json.JSONDecodeError, OSError, ValueError, gzip.BadGzipFile):
+        return []
+    return []
+
+
+def search(query: str, docs: list[dict], limit: int = 5) -> list[tuple[float, dict]]:
+    term_weights = weighted_query_terms(query)
+    anchors = query_anchors(query)
+    if not term_weights or not anchors or not docs:
+        return []
+    term_docs = [tokens(doc["text"]) for doc in docs]
+    avg_len = sum(map(len, term_docs)) / max(len(term_docs), 1)
+    df = Counter(term for terms in term_docs for term in set(terms))
+    scores = []
+    for doc, terms in zip(docs, term_docs):
+        tf = Counter(terms)
+        # A passage must mention the question's actual topic. Generic overlap
+        # (for example, "used" or a model number) is not enough to retrieve it.
+        if not any(tf[term] for term in anchors):
+            continue
+        length = len(terms)
+        score = 0.0
+        for term, weight in term_weights.items():
+            if not tf[term]:
+                continue
+            idf = math.log(1 + (len(docs) - df[term] + 0.5) / (df[term] + 0.5))
+            k1, b = 1.5, 0.75
+            score += weight * idf * tf[term] * (k1 + 1) / (tf[term] + k1 * (1 - b + b * length / max(avg_len, 1)))
+        if score > 0:
+            scores.append((score, doc))
+    return sorted(scores, key=lambda item: item[0], reverse=True)[:limit]
+
+
+def is_battery_capacity_question(question: str) -> bool:
+    text = question.lower()
+    return "battery" in text and any(term in text for term in ("capacity", "how much", "size", "watt hour", "watt-hour"))
+
+
+def find_battery_capacity_specs(docs: list[dict]) -> list[tuple[str, dict]]:
+    pattern = re.compile(r"\b(\d+(?:\.\d+)?)\s*(Wh|mAh|Ah)\b", re.I)
+    found = []
+    seen = set()
+    for doc in docs:
+        text = doc["text"]
+        for match in pattern.finditer(text):
+            context = text[max(0, match.start() - 100):match.end() + 100]
+            if not re.search(r"battery|battery pack", context, re.I):
+                continue
+            value = f"{match.group(1)} {match.group(2)}"
+            identity = (doc.get("model", doc["source"]), value.lower())
+            if identity in seen:
+                continue
+            seen.add(identity)
+            found.append((value, doc))
+    return found
+
+
+def is_adapter_power_question(question: str) -> bool:
+    text = question.lower()
+    asks_power = bool(re.search(r"\b(wattage|watts|power output|output power|how much power)\b", text))
+    asks_adapter = bool(re.search(r"\b(chargers?|adapters?|charging)\b", text))
+    return asks_power and asks_adapter
+
+
+def find_adapter_power_specs(docs: list[dict]) -> list[dict]:
+    found = []
+    seen = set()
+    for doc in docs:
+        text = doc["text"]
+        if not re.search(r"power adapter information", text, re.I):
+            continue
+        wattages = re.findall(r"\b(\d+(?:\.\d+)?)\s*W\b", text, re.I)
+        if not wattages:
+            continue
+        identity = (doc.get("model", doc["source"]), doc.get("page"))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        found.append(doc)
+    return found
+
+
+def adapter_power_answer(docs: list[dict], model: str) -> str:
+    wattages = sorted({f"{number} W" for doc in docs for number in re.findall(
+        r"\b(\d+(?:\.\d+)?)\s*W\b", doc["text"], re.I
+    )}, key=lambda value: float(value.split()[0]))
+    voltages = sorted({f"{number} V" for doc in docs for number in re.findall(
+        r"Rating output voltage:\s*(\d+(?:\.\d+)?)\s*V", doc["text"], re.I
+    )}, key=lambda value: float(value.split()[0]))
+    rating_text = ", ".join(wattages)
+    if voltages:
+        rating_text += f"; listed output voltage: {', '.join(voltages)}"
+    return (
+        f"The {model} manual lists adapter output ratings of {rating_text}. "
+        "The correct rating depends on the exact laptop configuration; check the label on the adapter supplied with your laptop."
+    )
+
+
+def unsupported_spec_answer(question: str, model: str) -> str | None:
+    text = question.lower()
+    requested = None
+    if re.search(r"\b(processor|cpu|chipset)\b", text):
+        requested = "the processor model"
+    elif re.search(r"\b(ram|memory)\b", text):
+        requested = "the installed memory configuration"
+    elif re.search(r"\b(storage|ssd|hdd)\b", text):
+        requested = "the storage configuration"
+    elif re.search(r"\b(gpu|graphics card|graphics processor)\b", text):
+        requested = "the graphics processor"
+    elif re.search(r"\b(resolution|screen resolution)\b", text):
+        requested = "the display resolution"
+    elif re.search(r"\b(wattage|watts|charger output|power output)\b", text):
+        requested = "the power adapter output rating"
+    if not requested:
+        return None
+    return (
+        f"The {model} manual does not list {requested}. VivoBook hardware can vary by exact configuration. "
+        "Check the full model code on the laptop and its ASUS specifications page for that detail."
+    )
+
+
+def extractive_answer(question: str, results: list[tuple[float, dict]]) -> str:
+    term_weights = weighted_query_terms(question)
+    anchors = query_anchors(question)
+    candidates = []
+    for rank, (chunk_score, hit) in enumerate(results, start=1):
+        for sentence in re.split(r"(?<=[.!?])\s+|\s+\u2022\s+", hit["text"]):
+            sentence = re.sub(r"\s+", " ", sentence).strip(" \t\r\n•")
+            action = re.search(r"\b(?:insert|connect|plug|use|keep|ensure|press|turn)\b", sentence, re.I)
+            if action and len(sentence[:action.start()].split()) <= 7:
+                sentence = sentence[action.start():]
+            sentence = re.sub(
+                r"^(Use only the bundled power adapter) to charge.*$",
+                r"\1.",
+                sentence,
+                flags=re.I,
+            )
+            sentence = re.sub(
+                r"^Insert the bundled power adapter into this port",
+                "Connect the bundled power adapter to the laptop's DC input port",
+                sentence,
+                flags=re.I,
+            )
+            sentence_terms = set(tokens(sentence))
+            overlap = set(term_weights) & sentence_terms
+            if not anchors.intersection(sentence_terms):
+                continue
+            is_adapter_safety = bool(re.match(r"Use only the bundled power adapter\.", sentence, re.I))
+            if (len(sentence.split()) >= 7 or is_adapter_safety) and overlap:
+                score = sum(term_weights[term] for term in overlap) + min(chunk_score, 5) / (rank * 10)
+                is_charge_question = bool({"charge", "charging", "charger"} & set(tokens(question)))
+                if is_charge_question and re.search(r"\b(insert|connect|plug)\b", sentence, re.I):
+                    score += 2
+                if is_charge_question and re.match(r"Use only the bundled power adapter\.", sentence, re.I):
+                    score += 3.5
+                if is_charge_question and re.search(r"long period|50%|fully charged|battery life", sentence, re.I):
+                    score -= 5
+                candidates.append((score, rank, sentence))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    if {"charge", "charging", "charger"} & set(tokens(question)):
+        primary = next(
+            ((rank, sentence) for _, rank, sentence in candidates
+             if "adapter" in tokens(sentence) and "charge" in tokens(sentence)
+             and re.search(r"\b(insert|connect|plug)\b", sentence, re.I)),
+            None,
+        )
+        safety = next(
+            ((rank, sentence) for _, rank, sentence in candidates
+             if re.match(r"Use only the bundled power adapter\.", sentence, re.I)),
+            None,
+        )
+        if primary:
+            answer = f"{primary[1]} [{primary[0]}]"
+            if safety:
+                answer += f"\n\n{ safety[1] } [{ safety[0] }]"
+            return answer
+    chosen = []
+    seen = set()
+    for _, rank, sentence in candidates:
+        normalized = " ".join(tokens(sentence))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        chosen.append((rank, sentence))
+        if len(chosen) == 2:
+            break
+    if not chosen:
+        return "I found related passages, but they do not state a direct answer. Check the cited pages or the ASUS specifications for your exact model."
+    return "\n\n".join(f"{sentence} [{rank}]" for rank, sentence in chosen)
+
+
+def generate_answer(question: str, results: list[tuple[float, dict]]) -> str | None:
+    host = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    model = os.getenv("OLLAMA_MODEL", "llama3.2")
+    excerpts = "\n\n".join(
+        f"[{i}] {hit['source']}, page {hit['page']}: {hit['text']}"
+        for i, (_, hit) in enumerate(results, start=1)
+    )
+    prompt = (
+        "Answer the user's laptop question using only facts explicitly stated in the manual excerpts below. "
+        "If the excerpts do not state the answer, say so; do not guess or use general product knowledge. "
+        "Cite every factual claim with an excerpt number such as [1]. Do not invent specifications or model details.\n\n"
+        f"Manual excerpts:\n{excerpts}\n\nQuestion: {question}"
+    )
+    body = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode()
+    try:
+        request = Request(f"{host}/api/generate", data=body, headers={"Content-Type": "application/json"})
+        with urlopen(request, timeout=4) as response:
+            answer = json.loads(response.read().decode()).get("response", "").strip()
+            citations = [int(number) for number in re.findall(r"\[(\d+)\]", answer)]
+            if not answer or not citations or any(number < 1 or number > len(results) for number in citations):
+                return None
+            return answer
+    except (URLError, TimeoutError, json.JSONDecodeError):
+        return None
+
+
+def announce_model_change() -> None:
+    selected = st.session_state.get("model_family_filter", "All indexed models")
+    st.toast(f"Manual search switched to: {selected}")
+
+
+st.set_page_config(page_title="VivoBook Manual Assistant", page_icon="💻", layout="wide")
+st.markdown("""
+<style>
+:root { --ink:#102a43; --muted:#52677d; --blue:#1769e0; --blue-dark:#114da8; --line:#d9e6f3; --pale:#edf5ff; }
+[data-testid="stAppViewContainer"] { background:#f4f8fd; color:var(--ink); }
+[data-testid="stHeader"] { background:rgba(244,248,253,.92); }
+[data-testid="stMain"] { background:#f4f8fd; }
+[data-testid="stSidebar"] { background:#fff; border-right:1px solid var(--line); }
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] label { color:var(--ink)!important; }
+[data-testid="stMainBlockContainer"] { padding-top:2.2rem; max-width:1120px; }
+h1 { color:#103b70!important; letter-spacing:-.035em; }
+h2,h3 { color:#173f6d!important; }
+p, label, [data-testid="stCaptionContainer"] { color:var(--muted); }
+[data-testid="stChatMessage"] { border:1px solid var(--line); border-radius:18px; padding:1.1rem 1.25rem; margin:1rem 0; box-shadow:0 5px 18px rgba(26,73,124,.045); }
+[data-testid="stChatMessage"] { background:#fff; }
+[class*="product-photo"] { height:220px; display:flex; align-items:center; justify-content:center; background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; margin:.5rem 0 1rem; }
+.product-photo img { width:100%; height:100%; object-fit:contain; padding:10px; }
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p { color:var(--ink)!important; }
+[data-testid="stChatInput"] { background:#fff; border:1px solid #bed3eb; border-radius:16px; box-shadow:0 4px 16px rgba(26,73,124,.07); }
+[data-testid="stChatInput"] textarea { color:var(--ink)!important; }
+[data-testid="stSelectbox"] [data-baseweb="select"] > div { background:#fff; border-color:#bed3eb; border-radius:12px; }
+button[kind="primary"] { background:var(--blue)!important; border-color:var(--blue)!important; border-radius:10px!important; }
+button[kind="primary"]:hover { background:var(--blue-dark)!important; border-color:var(--blue-dark)!important; }
+[data-testid="stExpander"] { background:#fff; border:1px solid var(--line); border-radius:14px; }
+hr { border-color:var(--line); }
+</style>
+""", unsafe_allow_html=True)
+st.title("💻 VivoBook Manual Assistant")
+st.caption("A quick, model-aware guide to your ASUS laptop. Ask a question below; supporting manual pages are available under Sources.")
+st.session_state.setdefault("chat_history", [])
+
+with st.sidebar:
+    st.header("Manual library")
+    st.write("Search the included manual library or add an English PDF for another exact model.")
+    uploads = st.file_uploader("Add manuals (PDF)", type=["pdf"], accept_multiple_files=True)
+    if uploads and st.button("Save and index manuals", type="primary"):
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        for uploaded in uploads:
+            safe_name = Path(uploaded.name).name
+            (DATA_DIR / safe_name).write_bytes(uploaded.getvalue())
+        with st.spinner("Extracting pages and building the search index…"):
+            count = len(rebuild_index())
+        load_index.clear()
+        st.success(f"Indexed {count} text chunks.")
+    if st.button("Rebuild search index"):
+        with st.spinner("Rebuilding…"):
+            count = len(rebuild_index())
+        load_index.clear()
+        st.success(f"Indexed {count} text chunks.")
+    if st.button("Clear conversation"):
+        st.session_state.chat_history = []
+        st.rerun()
+    st.divider()
+    st.caption("The app answers from retrieved manual text and cites its sources. Optional: run Ollama locally and set OLLAMA_MODEL (default: llama3.2) for a more conversational summary.")
+
+docs = load_index()
+if not docs and any(DATA_DIR.glob("*.pdf")):
+    with st.spinner("Building the search index from the included manuals…"):
+        docs = rebuild_index()
+    load_index.clear()
+if not docs:
+    st.info("No manuals indexed yet. Add an English VivoBook manual PDF in the sidebar to get started.")
+    st.markdown("Example: **ASUS Vivobook 15 (X1504)** — see the official [ASUS support page](https://www.asus.com/supportonly/x1504za/helpdesk_manual/).")
+
+if docs:
+    available_models = sorted({doc.get("model", doc["source"]) for doc in docs})
+    model_filter = st.selectbox(
+        "Choose the manual family to search",
+        ["All indexed models", *available_models],
+        key="model_family_filter",
+        on_change=announce_model_change,
+        help="This limits retrieval to the selected family's manuals. Then ask a question below.",
+    )
+    active_docs = docs if model_filter == "All indexed models" else [
+        doc for doc in docs if doc.get("model", doc["source"]) == model_filter
+    ]
+    st.caption(f"Search scope: **{model_filter}** · {len(active_docs):,} manual passages")
+    products = load_products()
+    if products:
+        st.subheader("Explore VivoBook models")
+        if model_filter == "All indexed models":
+            visible_products = products
+            st.caption("Product photos, configurations, and marketplace details for the included model families.")
+        else:
+            visible_products = [p for p in products if p["family"] in model_filter]
+            if not visible_products:
+                visible_products = [p for p in products if p.get("family") == "default"]
+            st.caption("Representative configuration for this manual family. Select the exact product code before comparing prices or specifications.")
+        cols = st.columns(min(3, max(1, len(visible_products))))
+        for index, product in enumerate(visible_products):
+            with cols[index % len(cols)]:
+                show_product_card(product)
+else:
+    active_docs = []
+
+for message in st.session_state.chat_history:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        if message["role"] == "assistant" and message.get("sources"):
+            with st.expander("Sources", expanded=False):
+                for rank, hit in enumerate(message["sources"], start=1):
+                    st.markdown(f"**[{rank}] {hit.get('model', hit['source'])} · {hit['source']} — page {hit['page']}**")
+                    st.write(hit["text"])
+
+question = st.chat_input("Ask about setup, charging, keyboard shortcuts, or troubleshooting…", disabled=not active_docs)
+if question:
+    st.session_state.chat_history.append({"role": "user", "content": question})
+    with st.chat_message("user"):
+        st.write(question)
+
+    results = search(question, active_docs)
+    capacity_question = is_battery_capacity_question(question)
+    capacity_specs = find_battery_capacity_specs(active_docs) if capacity_question else []
+    adapter_power_question = is_adapter_power_question(question)
+    adapter_specs = find_adapter_power_specs(active_docs) if adapter_power_question else []
+    if capacity_question and capacity_specs:
+        results = [(1.0, doc) for _, doc in capacity_specs]
+    elif capacity_question:
+        results = []
+    if adapter_power_question:
+        results = [(1.0, doc) for doc in adapter_specs]
+
+    if capacity_question and not capacity_specs:
+        answer_text = "The selected manual does not specify a numeric battery capacity (Wh or mAh). Check the ASUS specifications for your laptop's exact model number, since capacity can vary by configuration."
+    elif capacity_question and capacity_specs:
+        answer_text = "\n\n".join(
+            f"{doc.get('model', doc['source'])}: {value}."
+            for value, doc in capacity_specs
+        )
+    elif adapter_power_question and adapter_specs:
+        answer_text = adapter_power_answer(adapter_specs, model_filter)
+    elif adapter_power_question:
+        answer_text = "The selected manual does not state a numeric power-adapter wattage. Check the label on the adapter supplied with your exact laptop model."
+    elif not results:
+        answer_text = unsupported_spec_answer(question, model_filter)
+        if not answer_text:
+            answer_text = "I couldn't find a relevant answer in this manual. Check that you selected the correct model family, or add the manual for your exact VivoBook model."
+    else:
+        generated = generate_answer(question, results)
+        answer_text = generated or extractive_answer(question, results)
+        answer_text = re.sub(r"\s*\[\d+\]", "", answer_text).strip()
+
+    source_docs = [hit for _, hit in results]
+    with st.chat_message("assistant"):
+        st.markdown(answer_text)
+        if source_docs:
+            with st.expander("Sources", expanded=False):
+                for rank, hit in enumerate(source_docs, start=1):
+                    st.markdown(f"**[{rank}] {hit.get('model', hit['source'])} · {hit['source']} — page {hit['page']}**")
+                    st.write(hit["text"])
+    st.session_state.chat_history.append({"role": "assistant", "content": answer_text, "sources": source_docs})
+

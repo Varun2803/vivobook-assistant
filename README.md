@@ -11,7 +11,7 @@ streamlit run app.py
 
 ## Deploy and share a link
 
-This app can be hosted on [Streamlit Community Cloud](https://share.streamlit.io/). Upload the project to a GitHub repository, then create an app using `app.py` as the entrypoint. Keep `requirements.txt`, `.streamlit/config.toml`, `data/laptops.json`, and the PDFs in `data/manuals/` in the repository so the hosted app has the same product catalog and manual library. Do not upload `.venv/`, `logs/`, or secrets. After deployment, share the `*.streamlit.app` URL; the local `127.0.0.1` URL only works on the computer running the app.
+This app can be hosted on [Streamlit Community Cloud](https://share.streamlit.io/). Upload the project to a GitHub repository, then create an app using `app.py` as the entrypoint. Keep `requirements.txt`, `.streamlit/config.toml`, `data/laptops.json`, and the pre-indexed manual passages under `data/packed_chunks/` in the repository so the hosted app can answer questions without processing the PDFs at startup. For local use, the original PDFs can stay under `data/manuals/`; the app can rebuild its index from them. Do not upload `.venv/`, `logs/`, or secrets. After deployment, share the `*.streamlit.app` URL; the local `127.0.0.1` URL only works on the computer running the app.
 
 The optional Ollama integration uses a local service and will not be available on Community Cloud unless you configure a separately hosted model endpoint. Manual retrieval and the extractive fallback work without Ollama.
 

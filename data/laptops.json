@@ -1,0 +1,63 @@
+[
+  {
+    "family": "Vivobook 15 X1504",
+    "name": "ASUS Vivobook 15",
+    "sku": "X1504VAP-BQ541WS · representative India configuration",
+    "image": "https://dlcdnwebimgs.asus.com/files/media/202603/cad7c7c7-a666-49ef-b519-8e21c4413dcd/v1/features/images/large/2x/s1/main.avif",
+    "specs": [["Processor", "Intel Core 5 120U"], ["Memory", "16 GB"], ["Storage", "512 GB SSD"], ["Display", "15.6-inch Full HD IPS"]],
+    "price": "₹73,990 MRP (ASUS Store snapshot)",
+    "price_note": "Price and stock can change; configuration differs by seller. Verify the SKU before buying.",
+    "url": "https://in.store.asus.com/light-weight-asus-vivobook-15-x1504vap-bq541ws.html"
+  },
+  {
+    "family": "X1605",
+    "name": "ASUS Vivobook 16",
+    "sku": "X1605 · representative configuration",
+    "image": "https://dlcdnwebimgs.asus.com/files/media/6e43f81d-e363-42fc-b0b7-e1434d4fce41/v4/features/images/large/2x/s1/main.webp",
+    "specs": [["Processor", "Up to Intel Core i5-13500H"], ["Memory", "Up to 16 GB"], ["Storage", "Up to 1 TB SSD"], ["Display", "16-inch WUXGA 16:10"]],
+    "url": "https://www.asus.com/in/laptops/for-home/vivobook/vivobook-16-x1605/"
+  },
+  {
+    "family": "M1605YA",
+    "name": "ASUS Vivobook 16",
+    "sku": "M1605YA · representative configuration",
+    "image": "https://dlcdnwebimgs.asus.com/gain/e7bccfbd-9a96-4922-ad06-1814a770579a/w800/fwebp",
+    "specs": [["Processor", "AMD Ryzen 7000 Series (varies by SKU)"], ["Display", "16-inch 16:10"], ["Use", "Everyday productivity"]],
+    "url": "https://www.asus.com/in/laptops/for-home/vivobook/asus-vivobook-16-m1605/"
+  },
+  {
+    "family": "E510",
+    "name": "ASUS Vivobook Go 15",
+    "sku": "E510 · representative configuration",
+    "image": "https://dlcdnwebimgs.asus.com/gain/b177da83-186f-4b76-902f-587b87525050/w800/fwebp",
+    "specs": [["Display", "15.6-inch"], ["Design", "Lightweight everyday laptop"], ["Configuration", "Varies by exact E510 SKU"]],
+    "url": "https://www.asus.com/laptops/for-home/vivobook/vivobook-go-15-e510/"
+  },
+  {
+    "family": "TP401",
+    "name": "ASUS VivoBook Flip 14",
+    "sku": "TP401MA · touch 2-in-1 family",
+    "image": "https://dlcdnwebimgs.asus.com/gain/55b91416-6a8d-4da0-9751-e8bcc4702271/w800/fwebp",
+    "specs": [["Form factor", "360° convertible 2-in-1"], ["Display", "14-inch touchscreen"], ["Configuration", "Varies by exact TP401 SKU"]],
+    "url": "https://www.asus.com/eg/laptops/for-home/vivobook/vivobook-flip-14-tp401/"
+  },
+  {
+    "family": "X412",
+    "name": "ASUS Vivobook 14",
+    "sku": "X412 · representative configuration",
+    "image": "https://dlcdnwebimgs.asus.com/gain/8095312b-5aec-47a1-9bfb-784b69ca9609/w800/fwebp",
+    "specs": [["Display", "14-inch FHD NanoEdge"], ["Weight", "About 1.5 kg"], ["Configuration", "Varies by exact X412 SKU"]],
+    "url": "https://www.asus.com/in/laptops/for-home/vivobook/vivobook-14-x412/"
+  },
+  {
+    "family": "S5406",
+    "name": "ASUS Vivobook S 14 OLED",
+    "sku": "S5406 · representative configuration",
+    "image": "https://dlcdnwebimgs.asus.com/gain/2e205f20-7e5e-48a5-99a2-ab30ce28948a/w800/fwebp",
+    "specs": [["Display", "14-inch OLED"], ["Battery", "Up to 75 Wh"], ["Weight", "About 1.3 kg"]],
+    "price": "From ₹94,990 (ASUS Store snapshot)",
+    "price_note": "Price shown is a dated store snapshot, not a live quote. Verify the exact configuration.",
+    "url": "https://www.asus.com/in/laptops/for-home/vivobook/asus-vivobook-s-14-oled-s5406/"
+  }
+]
+
