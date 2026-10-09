@@ -321,16 +321,24 @@ def extract_pdf_bytes(
     return docs
 
 
-def file_fingerprint(content: bytes, *, max_words: int = CHUNK_WORDS, overlap_words: int = CHUNK_OVERLAP_WORDS) -> str:
+def file_fingerprint(
+    content: bytes,
+    *,
+    source_name: str = "",
+    max_words: int = CHUNK_WORDS,
+    overlap_words: int = CHUNK_OVERLAP_WORDS,
+) -> str:
     digest = hashlib.sha256(content).hexdigest()
-    config = f"{CHUNKER_VERSION}:{max_words}:{overlap_words}:{digest}"
+    # Extraction metadata is derived from the source filename (model family and
+    # citation name), so identical bytes under another name are not equivalent.
+    config = f"{CHUNKER_VERSION}:{Path(source_name).name}:{max_words}:{overlap_words}:{digest}"
     return hashlib.sha256(config.encode("utf-8")).hexdigest()
 
 
 def cached_pdf_chunks(pdf_path: Path, cache_dir: Path) -> list[dict[str, Any]]:
     """Reuse extracted chunks for unchanged manuals and chunker settings."""
     content = pdf_path.read_bytes()
-    fingerprint = file_fingerprint(content)
+    fingerprint = file_fingerprint(content, source_name=pdf_path.name)
     cache_path = cache_dir / f"{fingerprint}.json"
     if cache_path.exists():
         try:
@@ -377,6 +385,11 @@ def rebuild_documents(
     for path in paths:
         try:
             extracted = cached_pdf_chunks(path, cache_dir)
+            if not extracted:
+                # Empty, scanned, or otherwise unextractable replacements must
+                # not evict a previous valid version of the same manual.
+                errors.append(path.name)
+                continue
             chunks.extend(extracted)
             succeeded.add(path.name)
         except Exception:
@@ -640,10 +653,36 @@ def answer_is_valid(answer: str, result_count: int, query: str, results: list[tu
     answer_terms = set(tokens(answer))
     if not query_concepts.intersection(answer_terms):
         return False
-    answer_content = {term for term in answer_terms if len(term) > 2}
-    for citation in set(citations):
-        source_terms = set(tokens(results[citation - 1][1].get("text", "")))
-        if answer_content and not (answer_content & source_terms):
+
+    # Validate each sentence against its own citations. The previous global
+    # overlap check allowed a supported clause to hide an invented second
+    # clause (for example, a BIOS instruction plus an unsupported GPU claim).
+    sentences = [part.strip() for part in re.split(
+        r"(?<=[.!?])\s+(?=[A-Z0-9*#-])|\n+", answer.strip()
+    ) if part.strip()]
+    numeric_or_model = re.compile(
+        r"\b(?:[a-z]{1,6}\d+[a-z0-9]*|\d+(?:\.\d+)?(?:\s?(?:%|mah|wh|w|v|gb|tb|ghz|mhz|mm|cm|inch|in))?)\b",
+        re.I,
+    )
+    for sentence in sentences:
+        sentence_citations = [int(n) for n in re.findall(r"\[(\d+)\]", sentence)]
+        if not sentence_citations:
+            return False
+        claim = re.sub(r"\[\d+\]", " ", sentence)
+        claim_terms = {term for term in tokens(claim) if len(term) > 1}
+        if not claim_terms:
+            return False
+        technical_values = {value.casefold().replace(" ", "") for value in numeric_or_model.findall(claim)}
+        supported = False
+        for citation in sentence_citations:
+            source = str(results[citation - 1][1].get("text", ""))
+            source_terms = set(tokens(source))
+            source_values = {value.casefold().replace(" ", "") for value in numeric_or_model.findall(source)}
+            overlap = len(claim_terms & source_terms) / len(claim_terms)
+            if technical_values.issubset(source_values) and overlap >= 0.65:
+                supported = True
+                break
+        if not supported:
             return False
     return True
 
