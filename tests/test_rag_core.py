@@ -79,6 +79,15 @@ class RetrievalTests(unittest.TestCase):
         self.assertTrue(all("X1605" in hit["model"] for _, hit in results))
         self.assertEqual(rag_core.retrieve("How do I pair Bluetooth on X1700?", self.index), [])
 
+    def test_model_specific_wireless_queries_require_model_selection(self) -> None:
+        for question in (
+            "Does VivoBook support Wi-Fi 6?",
+            "Which wireless adapter is installed?",
+            "Does this model have Bluetooth 5?",
+        ):
+            with self.subTest(question=question):
+                self.assertTrue(rag_core.needs_exact_model(question))
+
     def test_duplicate_passage_keeps_exact_model_filter_and_citation(self) -> None:
         text = "This notebook operates in ambient temperatures between 5 C and 35 C."
         index = rag_core.build_search_index([
