@@ -532,6 +532,12 @@ p, label, [data-testid="stCaptionContainer"] { color:var(--muted); }
 .hero-copy { max-width:710px; margin:0; color:#cbd5e1!important; font-size:1.03rem; line-height:1.7; }
 .hero-tags { display:flex; flex-wrap:wrap; gap:.55rem; margin-top:1.25rem; }
 .hero-tags span { padding:.35rem .68rem; color:#e2e8f0; border:1px solid #3c4656; border-radius:999px; background:rgba(255,255,255,.045); font-size:.72rem; font-weight:600; letter-spacing:.035em; }
+.st-key-product_catalog { padding:1.15rem 1.35rem 1.3rem; margin:1rem 0 1.5rem; border:1px solid #263a62; border-radius:20px; background:radial-gradient(ellipse at 90% 0%,rgba(37,99,235,.24),transparent 38%),linear-gradient(135deg,#081a3a 0%,#0c1220 58%,#101114 100%); box-shadow:0 14px 34px rgba(3,10,25,.14); }
+.st-key-product_catalog h2,.st-key-product_catalog h3 { color:#f8fafc!important; }
+.st-key-product_catalog p,.st-key-product_catalog label { color:#e2e8f0!important; }
+.st-key-product_catalog [data-testid="stCaptionContainer"] { color:#a9bddb!important; }
+.st-key-product_catalog [data-testid="stVerticalBlockBorderWrapper"] { background:#fff; border-color:#dbe5f1; border-radius:15px; }
+.st-key-product_catalog [data-testid="stLinkButton"] a { background:#fff; color:#111827!important; border-color:#cbd5e1; }
 [data-testid="stChatMessage"] { border:1px solid var(--line); border-radius:18px; padding:1.05rem 1.25rem; margin:1rem 0; background:#fff; box-shadow:0 7px 22px rgba(15,23,42,.045); }
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p { color:var(--ink)!important; line-height:1.75; }
 [class*="product-photo"] { height:220px; display:flex; align-items:center; justify-content:center; background:#f8fafc; border:1px solid var(--line); border-radius:14px; overflow:hidden; margin:.5rem 0 1rem; }
@@ -606,22 +612,23 @@ if docs:
     active_docs = docs if model_filter == "All indexed models" else [
         doc for doc in docs if doc.get("model", doc["source"]) == model_filter
     ]
-    st.subheader("Product catalog")
-    if st.toggle("Browse model photos and buying details", value=False, key="show_product_catalog"):
-        products = load_products()
-        if products:
-            if model_filter == "All indexed models":
-                visible_products = products
-                st.caption("Product photos, configurations, and marketplace details for the included model families.")
-            else:
-                visible_products = [p for p in products if p["family"] in model_filter]
-                if not visible_products:
-                    visible_products = [p for p in products if p.get("family") == "default"]
-                st.caption("Representative configuration for this manual family. Select the exact product code before comparing prices or specifications.")
-            cols = st.columns(min(3, max(1, len(visible_products))))
-            for index, product in enumerate(visible_products):
-                with cols[index % len(cols)]:
-                    show_product_card(product)
+    with st.container(key="product_catalog"):
+        st.subheader("Product catalog")
+        if st.toggle("Browse model photos and buying details", value=False, key="show_product_catalog"):
+            products = load_products()
+            if products:
+                if model_filter == "All indexed models":
+                    visible_products = products
+                    st.caption("Product photos, configurations, and marketplace details for the included model families.")
+                else:
+                    visible_products = [p for p in products if p["family"] in model_filter]
+                    if not visible_products:
+                        visible_products = [p for p in products if p.get("family") == "default"]
+                    st.caption("Representative configuration for this manual family. Select the exact product code before comparing prices or specifications.")
+                cols = st.columns(min(3, max(1, len(visible_products))))
+                for index, product in enumerate(visible_products):
+                    with cols[index % len(cols)]:
+                        show_product_card(product)
 else:
     active_docs = []
 
