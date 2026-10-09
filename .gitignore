@@ -1,6 +1,8 @@
-.venv/
+\.venv/
 __pycache__/
 *.py[cod]
 logs/
 .streamlit/secrets.toml
+data/manual_index_cache/
+tests/__pycache__/
 
