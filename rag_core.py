@@ -541,6 +541,51 @@ def conversation_context(history: list[dict[str, str]], *, max_messages: int = M
     return text
 
 
+
+def extractive_answer(question: str, results: list[tuple[float, dict[str, Any]]]) -> str:
+    """Build a concise, cited fallback from retrieved manual sentences."""
+    if not results:
+        return "I couldn't find an answer in the selected manual."
+    direct = set(tokens(question))
+    weighted = weighted_query_terms(question)
+    anchors = query_anchors(question)
+    candidates: list[tuple[float, int, str]] = []
+    for rank, (retrieval_score, document) in enumerate(results, start=1):
+        body = str(document.get("text", ""))
+        for sentence in re.split(r"(?<=[.!?])\s+|\s+•\s+", body):
+            sentence = re.sub(r"\s+", " ", sentence).strip(" \t\r\n•")
+            if not sentence or is_boilerplate(sentence):
+                continue
+            sentence_tokens = set(tokens(sentence))
+            if not sentence_tokens.intersection(anchors):
+                continue
+            direct_matches = sentence_tokens.intersection(direct)
+            expanded_matches = set()
+            for term in direct:
+                expanded_matches.update(QUERY_EXPANSIONS.get(term, set()).intersection(sentence_tokens))
+            overlap = direct_matches | expanded_matches
+            if not overlap:
+                continue
+            score = sum(weighted.get(term, 0.5) for term in direct_matches)
+            score += 0.45 * len(expanded_matches)
+            score += min(max(retrieval_score, 0), 5) / (rank * 10)
+            candidates.append((score, rank, sentence))
+    candidates.sort(key=lambda row: row[0], reverse=True)
+    answer: list[str] = []
+    seen: set[str] = set()
+    for _, rank, sentence in candidates:
+        normalized = " ".join(tokens(sentence))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        answer.append(f"{sentence} [{rank}]")
+        if len(answer) == 2:
+            break
+    if not answer:
+        return "I found related passages, but they do not state a direct answer. Check the cited manual pages or select the exact model."
+    return "\n\n".join(answer)
+
+
 def answer_is_valid(answer: str, result_count: int, query: str, results: list[tuple[float, dict[str, Any]]]) -> bool:
     citations = [int(n) for n in re.findall(r"\[(\d+)\]", answer)]
     if not answer.strip() or not citations or any(n < 1 or n > result_count for n in citations) or is_boilerplate(answer):
