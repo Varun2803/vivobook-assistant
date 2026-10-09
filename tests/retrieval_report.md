@@ -56,3 +56,31 @@ All five deliberately unsupported questions returned no retrieved passages. The 
 
 The set is small and manually labelled. The BM25 parameter sweep is therefore a local tuning result, not a universal optimum; re-evaluate with fresh VivoBook questions before making broad accuracy claims. Streamlit Community Cloud will rebuild from GitHub; runtime caches and session uploads are not durable across restarts.
 
+## Follow-up correctness and security review (2026-10-09)
+
+The repository was reviewed again after the retrieval changes. Three confirmed defects were fixed:
+
+1. **High — generated claim validation was too permissive.** `answer_is_valid` previously accepted an entire answer if its combined tokens overlapped one cited passage. Reproduction: a supported BIOS instruction followed by an unsupported `99 Wh` battery claim was accepted with the same citation. Validation now requires citations per sentence, checks each sentence against the passage(s) it cites, and rejects numeric/model identifiers absent from cited text. This remains a lexical heuristic; it cannot prove semantic entailment, and Ollama was not available for live testing.
+2. **High — cached source metadata could be wrong.** The extraction fingerprint omitted the filename, although the filename determines the model family and citation name. Identical PDF bytes stored under X1504 and X1605 names could therefore reuse the first file's cached metadata. The source basename is now part of the fingerprint.
+3. **High — an empty replacement could evict a valid manual.** `rebuild_documents` treated a zero-chunk extraction as success and removed the prior passages for that filename. Empty/scanned replacements are now treated as failed extraction, preserving the previous indexed version.
+4. **High — wireless questions could search mixed families.** The exact-model guard omitted Wi-Fi, WLAN, wireless, and Bluetooth terms. In the bundled corpus, “Does VivoBook support Wi-Fi 6?” did not trigger clarification and ranked regulatory Wi-Fi 6E notices from unrelated manual families. These query terms now use the existing exact-model selection prompt.
+
+### Verification after fixes
+
+- `python -m unittest discover -s tests -v`: **35 tests passed**. Added coverage for sentence-level unsupported claims, same-byte/different-name cache metadata, empty replacement preservation, and wireless exact-model handling.
+- `python -m compileall -q app.py rag_core.py tests`: passed.
+- Retrieval metrics remained R@1 0.800, R@3 0.933, R@5 1.000, MRR 0.874; 0/5 unsupported queries retrieved passages; 57/57 deterministic extractive citation-text checks passed.
+- A fresh warm run measured retrieval mean/p95 of 1.79/2.96 ms and retrieve-plus-extractive mean/p95 of 2.72/4.06 ms. These small values vary between runs and are not a demonstrated performance regression or improvement.
+- All seven bundled PDFs (764 pages total) parsed with pypdf: no empty extracted pages and no page-level extraction exceptions. This does not assess table fidelity or scanned PDFs outside the bundled set.
+- `pip check` reported no broken installed requirements. The app's Streamlit `AppTest` did not complete in this environment (bare ScriptRunContext warning and timeout), so startup and live Community Cloud behavior are not claimed as verified.
+
+### Remaining risks (not automatically changed)
+
+- The validator is lexical and may reject valid paraphrases or accept a claim whose word overlap is high but semantic relation is wrong. Reliable semantic faithfulness needs a human-reviewed answer set or a separately evaluated judge; neither is available here.
+- Only five intentionally unsupported prompts are in the evaluation. Add fresh, human-reviewed answerable and adversarial questions with passage-level labels before treating these results as representative.
+- `extract_text` flattens tables and page layout; no table-aware extraction or OCR is present. No table-dependent correctness dataset was available to justify a parser replacement.
+- A PDF may be within the 25 MB upload limit yet have extreme page/object complexity. There is no explicit page-count or CPU-time budget; stress testing of adversarial PDFs was not performed. Treat this as a resource-exhaustion risk for public uploads.
+- Ingestion silently skips an individual page if `extract_text` throws, and the user receives no page-specific warning. The bundled manuals had no such failures, so this remains a robustness gap.
+- `requirements.txt` uses bounded version ranges rather than a lockfile. `pip check` passed in the current environment, but a future dependency release could change behavior.
+- Community Cloud deployment was not accessed during this review. Session uploads and runtime caches remain ephemeral by design.
+
