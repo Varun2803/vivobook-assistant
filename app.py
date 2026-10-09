@@ -1,3 +1,4 @@
+Warning: fs was declared with const; use let for reassignable variables.
 from __future__ import annotations
 
 import json
@@ -12,7 +13,6 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 import streamlit as st
-from pypdf import PdfReader
 
 
 DATA_DIR = Path(__file__).parent / "data" / "manuals"
@@ -139,6 +139,10 @@ def split_text(text: str, size: int = 150, overlap: int = 30) -> list[str]:
 
 
 def extract_pdf(pdf_path: Path) -> list[dict]:
+    # PDF parsing is needed only when a user adds/rebuilds manuals. Keeping the
+    # import out of normal startup makes the chat-only path lighter.
+    from pypdf import PdfReader
+
     reader = PdfReader(str(pdf_path))
     lower_name = pdf_path.name.lower()
     if "x1504" in lower_name:
@@ -412,6 +416,24 @@ def announce_model_change() -> None:
     st.toast(f"Manual search switched to: {selected}")
 
 
+def render_sources_button(source_docs: list[dict], key: str) -> None:
+    """Keep source details hidden unless the user explicitly opens them."""
+    if not source_docs:
+        return
+    visible_key = f"sources_visible_{key}"
+    st.session_state.setdefault(visible_key, False)
+    if st.button(
+        "Hide sources" if st.session_state[visible_key] else "Sources",
+        key=f"sources_toggle_{key}",
+        type="secondary",
+    ):
+        st.session_state[visible_key] = not st.session_state[visible_key]
+    if st.session_state[visible_key]:
+        for rank, hit in enumerate(source_docs, start=1):
+            st.markdown(f"**[{rank}] {hit.get('model', hit['source'])} · {hit['source']} — page {hit['page']}**")
+            st.write(hit["text"])
+
+
 st.set_page_config(page_title="VivoBook Manual Assistant", page_icon="💻", layout="wide")
 st.markdown("""
 <style>
@@ -490,32 +512,30 @@ if docs:
         doc for doc in docs if doc.get("model", doc["source"]) == model_filter
     ]
     st.caption(f"Search scope: **{model_filter}** · {len(active_docs):,} manual passages")
-    products = load_products()
-    if products:
-        st.subheader("Explore VivoBook models")
-        if model_filter == "All indexed models":
-            visible_products = products
-            st.caption("Product photos, configurations, and marketplace details for the included model families.")
-        else:
-            visible_products = [p for p in products if p["family"] in model_filter]
-            if not visible_products:
-                visible_products = [p for p in products if p.get("family") == "default"]
-            st.caption("Representative configuration for this manual family. Select the exact product code before comparing prices or specifications.")
-        cols = st.columns(min(3, max(1, len(visible_products))))
-        for index, product in enumerate(visible_products):
-            with cols[index % len(cols)]:
-                show_product_card(product)
+    st.subheader("Explore VivoBook models")
+    if st.toggle("Show product photos and buying details", value=False, key="show_product_catalog"):
+        products = load_products()
+        if products:
+            if model_filter == "All indexed models":
+                visible_products = products
+                st.caption("Product photos, configurations, and marketplace details for the included model families.")
+            else:
+                visible_products = [p for p in products if p["family"] in model_filter]
+                if not visible_products:
+                    visible_products = [p for p in products if p.get("family") == "default"]
+                st.caption("Representative configuration for this manual family. Select the exact product code before comparing prices or specifications.")
+            cols = st.columns(min(3, max(1, len(visible_products))))
+            for index, product in enumerate(visible_products):
+                with cols[index % len(cols)]:
+                    show_product_card(product)
 else:
     active_docs = []
 
-for message in st.session_state.chat_history:
+for message_index, message in enumerate(st.session_state.chat_history):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
         if message["role"] == "assistant" and message.get("sources"):
-            with st.expander("Sources", expanded=False):
-                for rank, hit in enumerate(message["sources"], start=1):
-                    st.markdown(f"**[{rank}] {hit.get('model', hit['source'])} · {hit['source']} — page {hit['page']}**")
-                    st.write(hit["text"])
+            render_sources_button(message["sources"], f"history_{message_index}")
 
 question = st.chat_input("Ask about setup, charging, keyboard shortcuts, or troubleshooting…", disabled=not active_docs)
 if question:
@@ -558,10 +578,5 @@ if question:
     source_docs = [hit for _, hit in results]
     with st.chat_message("assistant"):
         st.markdown(answer_text)
-        if source_docs:
-            with st.expander("Sources", expanded=False):
-                for rank, hit in enumerate(source_docs, start=1):
-                    st.markdown(f"**[{rank}] {hit.get('model', hit['source'])} · {hit['source']} — page {hit['page']}**")
-                    st.write(hit["text"])
+        render_sources_button(source_docs, "latest")
     st.session_state.chat_history.append({"role": "assistant", "content": answer_text, "sources": source_docs})
-
