@@ -7,7 +7,16 @@
     ],
     "fact": "blinks slowly when the Notebook PC is in sleep mode",
     "answerable": true,
-    "category": "power"
+    "category": "power",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          24
+        ],
+        "fact": "blinks slowly when the Notebook PC is in sleep mode"
+      }
+    ]
   },
   {
     "question": "How do I force an E510 to shut down if it is unresponsive?",
@@ -17,7 +26,16 @@
     ],
     "fact": "press and hold the power button for at least four",
     "answerable": true,
-    "category": "troubleshooting"
+    "category": "troubleshooting",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Go_E510_E25372_EN.pdf",
+        "pages": [
+          19
+        ],
+        "fact": "press and hold the power button for at least four"
+      }
+    ]
   },
   {
     "question": "How do I access BIOS through POST?",
@@ -28,7 +46,17 @@
     ],
     "fact": "Using POST to access BIOS",
     "answerable": true,
-    "category": "BIOS"
+    "category": "BIOS",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          80,
+          81
+        ],
+        "fact": "Using POST to access BIOS"
+      }
+    ]
   },
   {
     "question": "How do I update BIOS on TP401 using a USB flash disk?",
@@ -39,7 +67,23 @@
     ],
     "fact": "To update the BIOS",
     "answerable": true,
-    "category": "BIOS"
+    "category": "BIOS",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          86
+        ],
+        "fact": "To update the BIOS"
+      },
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          87
+        ],
+        "fact": "Locate your downloaded BIOS file in the flash disk drive"
+      }
+    ]
   },
   {
     "question": "Which TP401 keyboard shortcut launches File Explorer?",
@@ -47,9 +91,18 @@
     "pages": [
       71
     ],
-    "fact": "Launches File Explorer",
+    "fact": "Launches the File Explorer",
     "answerable": true,
-    "category": "keyboard"
+    "category": "keyboard",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          71
+        ],
+        "fact": "Launches the File Explorer"
+      }
+    ]
   },
   {
     "question": "What does the function key for sleep do?",
@@ -59,7 +112,16 @@
     ],
     "fact": "Puts the Notebook PC into Sleep mode",
     "answerable": true,
-    "category": "keyboard"
+    "category": "keyboard",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          41
+        ],
+        "fact": "Puts the Notebook PC into Sleep mode"
+      }
+    ]
   },
   {
     "question": "How can I toggle airplane mode with a keyboard shortcut?",
@@ -69,7 +131,16 @@
     ],
     "fact": "Turns Airplane mode on or off",
     "answerable": true,
-    "category": "keyboard"
+    "category": "keyboard",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          41
+        ],
+        "fact": "Turns Airplane mode on or off"
+      }
+    ]
   },
   {
     "question": "How do I connect to a Wi-Fi wireless network?",
@@ -79,7 +150,16 @@
     ],
     "fact": "Connecting to wireless networks Wi-Fi",
     "answerable": true,
-    "category": "connectivity"
+    "category": "connectivity",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          73
+        ],
+        "fact": "Connecting to wireless networks Wi-Fi"
+      }
+    ]
   },
   {
     "question": "How do I pair a Bluetooth device?",
@@ -89,7 +169,16 @@
     ],
     "fact": "Select Bluetooth & devices > Add device",
     "answerable": true,
-    "category": "connectivity"
+    "category": "connectivity",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          74
+        ],
+        "fact": "Select Bluetooth & devices > Add device"
+      }
+    ]
   },
   {
     "question": "What is the micro HDMI output port for?",
@@ -99,7 +188,16 @@
     ],
     "fact": "Micro HDMI output port",
     "answerable": true,
-    "category": "ports"
+    "category": "ports",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          21
+        ],
+        "fact": "Micro HDMI output port"
+      }
+    ]
   },
   {
     "question": "What transfer rate does the USB Type-C port provide?",
@@ -109,7 +207,16 @@
     ],
     "fact": "USB 3.2 Gen 1 Type-C",
     "answerable": true,
-    "category": "ports"
+    "category": "ports",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Go_E510_E25372_EN.pdf",
+        "pages": [
+          25
+        ],
+        "fact": "USB 3.2 Gen 1 Type-C"
+      }
+    ]
   },
   {
     "question": "Which microSD card formats does the card reader support?",
@@ -119,7 +226,16 @@
     ],
     "fact": "microSD card formats",
     "answerable": true,
-    "category": "ports"
+    "category": "ports",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          25
+        ],
+        "fact": "microSD card formats"
+      }
+    ]
   },
   {
     "question": "How should I clean my notebook safely?",
@@ -129,7 +245,16 @@
     ],
     "fact": "Caring for your Notebook PC",
     "answerable": true,
-    "category": "maintenance"
+    "category": "maintenance",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          10
+        ],
+        "fact": "Caring for your Notebook PC"
+      }
+    ]
   },
   {
     "question": "How should I store the battery if I will not use the laptop for a long time?",
@@ -139,7 +264,16 @@
     ],
     "fact": "charge the battery power to 50%",
     "answerable": true,
-    "category": "battery"
+    "category": "battery",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          13
+        ],
+        "fact": "charge the battery power to 50%"
+      }
+    ]
   },
   {
     "question": "What TP401 battery charging precautions are listed?",
@@ -149,18 +283,35 @@
     ],
     "fact": "Frequently charging a battery under high voltage",
     "answerable": true,
-    "category": "battery"
+    "category": "battery",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          12
+        ],
+        "fact": "Frequently charging a battery under high voltage"
+      }
+    ]
   },
   {
-    "question": "What battery charging precautions are listed?",
+    "question": "How often should the TP401 battery be recharged when unused for long periods?",
     "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
     "pages": [
-      12,
       13
     ],
-    "fact": "Avoid charging the battery",
+    "fact": "Recharge the battery power to 50% every three months",
     "answerable": true,
-    "category": "battery"
+    "category": "battery",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          13
+        ],
+        "fact": "Recharge the battery power to 50% every three months"
+      }
+    ]
   },
   {
     "question": "How do I use the touch screen panel gestures?",
@@ -170,7 +321,16 @@
     ],
     "fact": "Using touch screen panel gestures",
     "answerable": true,
-    "category": "display"
+    "category": "display",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          31
+        ],
+        "fact": "Using touch screen panel gestures"
+      }
+    ]
   },
   {
     "question": "Which keyboard keys increase or decrease display brightness?",
@@ -180,7 +340,16 @@
     ],
     "fact": "Decreases display brightness Increases display brightness",
     "answerable": true,
-    "category": "display"
+    "category": "display",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          41
+        ],
+        "fact": "Decreases display brightness Increases display brightness"
+      }
+    ]
   },
   {
     "question": "How can the power button put the laptop into hibernate mode?",
@@ -190,7 +359,16 @@
     ],
     "fact": "hibernate mode and wake it up from sleep",
     "answerable": true,
-    "category": "power"
+    "category": "power",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Go_E510_E25372_EN.pdf",
+        "pages": [
+          19
+        ],
+        "fact": "hibernate mode and wake it up from sleep"
+      }
+    ]
   },
   {
     "question": "What Windows recovery options are available on TP401?",
@@ -201,7 +379,23 @@
     ],
     "fact": "Using recovery options on your Notebook PC",
     "answerable": true,
-    "category": "recovery"
+    "category": "recovery",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          88
+        ],
+        "fact": "Keep my files - This option allows you to refresh your Notebook PC"
+      },
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          89
+        ],
+        "fact": "Advanced startup - Using this option allows you to perform other advanced recovery options"
+      }
+    ]
   },
   {
     "question": "Can Advanced startup recover Windows using a USB drive?",
@@ -211,7 +405,16 @@
     ],
     "fact": "Advanced startup",
     "answerable": true,
-    "category": "recovery"
+    "category": "recovery",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          89
+        ],
+        "fact": "Advanced startup"
+      }
+    ]
   },
   {
     "question": "When does the camera indicator light up?",
@@ -221,7 +424,16 @@
     ],
     "fact": "Camera indicator lights up when the built-in camera is in use",
     "answerable": true,
-    "category": "camera"
+    "category": "camera",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Go_E510_E25372_EN.pdf",
+        "pages": [
+          17
+        ],
+        "fact": "Camera indicator lights up when the built-in camera is in use"
+      }
+    ]
   },
   {
     "question": "Where can I plug in a headset or external microphone?",
@@ -231,47 +443,92 @@
     ],
     "fact": "Headphone/Headset/Microphone jack",
     "answerable": true,
-    "category": "audio"
+    "category": "audio",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          20
+        ],
+        "fact": "Headphone/Headset/Microphone jack"
+      }
+    ]
   },
   {
     "question": "Does airplane mode disable Wi-Fi on TP401?",
+    "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+    "pages": [
+      73
+    ],
+    "fact": "Airplane mode disables this feature",
+    "answerable": true,
+    "category": "connectivity",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          73
+        ],
+        "fact": "Airplane mode disables this feature"
+      }
+    ]
+  },
+  {
+    "question": "What does airplane mode disable on TP401?",
     "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
     "pages": [
       75
     ],
     "fact": "Airplane mode disables wireless communication",
     "answerable": true,
-    "category": "troubleshooting"
+    "category": "connectivity",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          75
+        ],
+        "fact": "Airplane mode disables wireless communication"
+      }
+    ]
   },
   {
-    "question": "Does airplane mode disable the Wi-Fi connection?",
-    "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
-    "pages": [
-      73
-    ],
-    "fact": "Airplane mode disables this function",
-    "answerable": true,
-    "category": "connectivity"
-  },
-  {
-    "question": "Which multimedia actions can TP401 function keys control?",
+    "question": "What commands do TP401 function keys trigger?",
     "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
     "pages": [
       41
     ],
-    "fact": "Function keys",
+    "fact": "trigger the following commands",
     "answerable": true,
-    "category": "power"
+    "category": "keyboard",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          41
+        ],
+        "fact": "trigger the following commands"
+      }
+    ]
   },
   {
-    "question": "How does the TP401 manual advise preventing liquid damage?",
+    "question": "How does TP401 advise preventing liquid damage?",
     "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
     "pages": [
       10
     ],
-    "fact": "Keep any liquids away",
+    "fact": "Keep any liquids from entering",
     "answerable": true,
-    "category": "keyboard"
+    "category": "maintenance",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          10
+        ],
+        "fact": "Keep any liquids from entering"
+      }
+    ]
   },
   {
     "question": "How can I extend the lifespan of the TP401 OLED display?",
@@ -281,17 +538,35 @@
     ],
     "fact": "avoid setting your OLED display at maximum brightness",
     "answerable": true,
-    "category": "maintenance"
+    "category": "display",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          66
+        ],
+        "fact": "avoid setting your OLED display at maximum brightness"
+      }
+    ]
   },
   {
-    "question": "How can I prevent image sticking on the OLED display?",
+    "question": "How does TP401 prevent prolonged taskbar display on OLED?",
     "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
     "pages": [
-      66
+      68
     ],
-    "fact": "Adjusting display brightness",
+    "fact": "To avoid displaying the taskbar on your OLED display for prolonged",
     "answerable": true,
-    "category": "display"
+    "category": "display",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_Flip_TP401_E19281_EN.pdf",
+        "pages": [
+          68
+        ],
+        "fact": "To avoid displaying the taskbar on your OLED display for prolonged"
+      }
+    ]
   },
   {
     "question": "What output voltage is listed for the X1504 power adapter?",
@@ -301,7 +576,16 @@
     ],
     "fact": "Rating output voltage",
     "answerable": true,
-    "category": "power"
+    "category": "power",
+    "relevant_passages": [
+      {
+        "source": "ASUS_VivoBook_X1504_E25357_EN.pdf",
+        "pages": [
+          33
+        ],
+        "fact": "Rating output voltage"
+      }
+    ]
   },
   {
     "question": "How many battery charge cycles are guaranteed before replacement?",
