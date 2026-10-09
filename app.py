@@ -25,6 +25,7 @@ from rag_core import (
     extract_pdf_bytes,
     extractive_answer,
     generate_with_ollama,
+    needs_exact_model,
     rebuild_documents,
     retrieve,
 )
@@ -276,16 +277,6 @@ def unsupported_spec_answer(question: str, model: str) -> str | None:
         f"The {model} manual does not list {requested}. VivoBook hardware can vary by exact configuration. "
         "Check the full model code on the laptop and its ASUS specifications page for that detail."
     )
-
-
-def needs_exact_model(question: str) -> bool:
-    return bool(re.search(
-        r"\b(bios|post|boot|firmware|processor|cpu|chipset|ram|memory|storage|ssd|hdd|gpu|graphics|"
-        r"resolution|battery capacity|wattage|charger output|power adapter|port|ports|usb|hdmi|"
-        r"keyboard shortcut|function key|fn key|power button|shut down|shutdown|hibernate|sleep mode)\b",
-        question,
-        re.I,
-    ))
 
 
 def generate_answer(question: str, results: list[tuple[float, dict]]) -> str | None:
