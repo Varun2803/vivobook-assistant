@@ -422,6 +422,18 @@ def explicit_model_codes(query: str) -> set[str]:
     return codes
 
 
+def needs_exact_model(question: str) -> bool:
+    """Identify hardware/setup questions that should not search mixed families."""
+    return bool(re.search(
+        r"\b(bios|post|boot|firmware|processor|cpu|chipset|ram|memory|storage|ssd|hdd|gpu|graphics|"
+        r"resolution|battery capacity|wattage|charger output|power adapter|port|ports|usb|hdmi|"
+        r"wi[ -]?fi|wireless|wlan|bluetooth|network adapter|keyboard shortcut|function key|fn key|"
+        r"power button|shut down|shutdown|hibernate|sleep mode)\b",
+        question,
+        re.I,
+    ))
+
+
 def _source_refs(doc: dict[str, Any]) -> list[dict[str, Any]]:
     refs = doc.get("source_refs")
     if isinstance(refs, list) and refs:
