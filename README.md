@@ -10,10 +10,11 @@ The current flow is PDF bytes → per-page text extraction and section-aware chu
 
 ### What changed
 
-- `rag_core.py` contains PDF extraction, page/section metadata, 220-word chunks with 40-word overlap, content/config fingerprints, cached extraction, safe index writes, duplicate collapse, BM25 ranking, model-code filters, bounded prompt context, citation validation, and Ollama fallback handling.
+- `rag_core.py` contains PDF extraction, page/section metadata, 220-word chunks with 40-word overlap, content/config/source fingerprints, cached extraction, safe index writes, duplicate collapse, BM25 ranking, model-code filters, bounded prompt context, sentence-scoped lexical citation checks, and Ollama fallback handling.
 - BM25 tokenization and document frequencies are built once per Streamlit session/index version, not for each question. Exact duplicate passages are collapsed while their distinct source/page references remain available.
 - Retrieval has configurable top-k, minimum score, and BM25 `k1`/`b`; it uses direct-term coverage checks, model-code scoping across retained duplicate references, query aliases, and boilerplate filtering. The BM25 parameter sweep favored `b=0` for this fixed-size passage corpus. No embedding model, FAISS, Chroma, or reranker is installed.
-- PDF extraction preserves source filename, physical page number, model identifier, and a detected section heading. Empty pages are skipped; page-level extraction errors do not discard other pages. Ingestion is cached by PDF SHA-256 plus chunker settings. Failed or absent PDFs do not wipe the existing index; unrelated manuals are retained on incremental rebuilds.
+- PDF extraction preserves source filename, physical page number, model identifier, and a detected section heading. Empty pages are skipped; page-level extraction errors do not discard other pages. Ingestion is cached by PDF SHA-256, source filename, and chunker settings so metadata cannot leak across same-content files. Failed, empty, or absent PDFs do not evict an existing manual; unrelated manuals are retained on incremental rebuilds.
+- When all families are in scope, hardware-specific wireless questions now ask for a model selection instead of mixing manual evidence. Generated-answer validation checks each cited sentence separately and rejects unsupported numeric/model identifiers; this is a conservative lexical check, not a semantic entailment guarantee.
 - Browser uploads are bounded to 25 MB per file and 50 MB per session and remain only in that Streamlit session. They are not persisted or put in a process-global cache.
 - Chat history is capped, only recent turns are passed as reference-resolution context, and history is explicitly not evidence. Answers retain citations and show document/page details in the expandable Sources control.
 - User-facing generation errors are bounded and fall back to extracted manual text. No secrets are embedded in source.
@@ -64,5 +65,5 @@ The earlier 0.80 figure used a binary question-level check with a different mini
 
 ### Persistence and limits
 
-Community Cloud local files may be replaced on restart/redeploy. Keep the bundled packed index in the repository; do not rely on runtime local writes for persistent manuals. User-uploaded manuals are session-scoped and disappear when that session ends. The bundled manuals cover seven families, not every VivoBook generation. Scanned/image-only PDFs require OCR, which is not included. Hardware specifications vary by full model/SKU. This project has not undergone a security audit and should not be described as production-secure.
+Community Cloud local files may be replaced on restart/redeploy. Keep the bundled packed index in the repository; do not rely on runtime local writes for persistent manuals. User-uploaded manuals are session-scoped and disappear when that session ends. The bundled manuals cover seven families, not every VivoBook generation. Scanned/image-only PDFs require OCR, which is not included. Hardware specifications vary by full model/SKU. The project has not had penetration testing and should not be described as production-secure.
 
