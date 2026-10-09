@@ -168,6 +168,11 @@ class GenerationAndConversationTests(unittest.TestCase):
             "source": "ASUS_VivoBook_X1504.pdf", "page": 12, "model": "X1504",
         })]
 
+    def test_extractive_fallback_returns_supported_answer_with_citation(self) -> None:
+        answer = rag_core.extractive_answer("How do I enter BIOS?", self.results)
+        self.assertIn("press F2", answer)
+        self.assertIn("[1]", answer)
+
     def test_ollama_api_failure_falls_back_without_crashing(self) -> None:
         with patch("rag_core.urlopen", side_effect=OSError("offline")):
             self.assertIsNone(rag_core.generate_with_ollama("How do I enter BIOS?", self.results))
