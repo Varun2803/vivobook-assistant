@@ -514,33 +514,51 @@ def render_sources_button(source_docs: list[dict], key: str) -> None:
 st.set_page_config(page_title="VivoBook Manual Assistant", page_icon="💻", layout="wide")
 st.markdown("""
 <style>
-:root { --ink:#102a43; --muted:#52677d; --blue:#1769e0; --blue-dark:#114da8; --line:#d9e6f3; --pale:#edf5ff; }
-[data-testid="stAppViewContainer"] { background:#f4f8fd; color:var(--ink); }
-[data-testid="stHeader"] { background:rgba(244,248,253,.92); }
-[data-testid="stMain"] { background:#f4f8fd; }
+:root { --ink:#111827; --muted:#64748b; --blue:#2563eb; --blue-dark:#1d4ed8; --line:#e2e8f0; --pale:#eff6ff; --black:#111318; }
+[data-testid="stAppViewContainer"] { background:#f5f7fa; color:var(--ink); }
+[data-testid="stHeader"] { background:rgba(245,247,250,.94); }
+[data-testid="stMain"] { background:#f5f7fa; }
 [data-testid="stSidebar"] { background:#fff; border-right:1px solid var(--line); }
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
 [data-testid="stSidebar"] label { color:var(--ink)!important; }
-[data-testid="stMainBlockContainer"] { padding-top:2.2rem; max-width:1120px; }
-h1 { color:#103b70!important; letter-spacing:-.035em; }
-h2,h3 { color:#173f6d!important; }
+[data-testid="stMainBlockContainer"] { padding-top:1.5rem; max-width:1240px; }
+h1,h2,h3 { color:var(--ink)!important; letter-spacing:-.025em; }
 p, label, [data-testid="stCaptionContainer"] { color:var(--muted); }
-[data-testid="stChatMessage"] { border:1px solid var(--line); border-radius:18px; padding:1.1rem 1.25rem; margin:1rem 0; box-shadow:0 5px 18px rgba(26,73,124,.045); }
-[data-testid="stChatMessage"] { background:#fff; }
-[class*="product-photo"] { height:220px; display:flex; align-items:center; justify-content:center; background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; margin:.5rem 0 1rem; }
+.hero { position:relative; overflow:hidden; padding:2.15rem 2.4rem; margin:0 0 1.6rem; border:1px solid #262a33; border-radius:22px; background:radial-gradient(ellipse at 88% 5%,rgba(37,99,235,.26),transparent 38%),linear-gradient(125deg,#111318 0%,#191d25 72%,#17243a 100%); box-shadow:0 16px 40px rgba(15,23,42,.13); }
+.hero:after { content:""; position:absolute; left:0; bottom:0; height:4px; width:100%; background:linear-gradient(90deg,#3b82f6 0%,#60a5fa 42%,transparent 88%); }
+.hero-kicker { display:flex; align-items:center; gap:.55rem; color:#bfdbfe; font-size:.72rem; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+.hero-dot { width:8px; height:8px; border-radius:50%; background:#60a5fa; box-shadow:0 0 12px #60a5fa; }
+.hero h1 { margin:.8rem 0 .45rem; color:#fff!important; font-size:clamp(2rem,4vw,3rem); line-height:1.08; font-weight:750; letter-spacing:-.045em; }
+.hero-copy { max-width:710px; margin:0; color:#cbd5e1!important; font-size:1.03rem; line-height:1.7; }
+.hero-tags { display:flex; flex-wrap:wrap; gap:.55rem; margin-top:1.25rem; }
+.hero-tags span { padding:.35rem .68rem; color:#e2e8f0; border:1px solid #3c4656; border-radius:999px; background:rgba(255,255,255,.045); font-size:.72rem; font-weight:600; letter-spacing:.035em; }
+[data-testid="stChatMessage"] { border:1px solid var(--line); border-radius:18px; padding:1.05rem 1.25rem; margin:1rem 0; background:#fff; box-shadow:0 7px 22px rgba(15,23,42,.045); }
+[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p { color:var(--ink)!important; line-height:1.75; }
+[class*="product-photo"] { height:220px; display:flex; align-items:center; justify-content:center; background:#f8fafc; border:1px solid var(--line); border-radius:14px; overflow:hidden; margin:.5rem 0 1rem; }
 .product-photo img { width:100%; height:100%; object-fit:contain; padding:10px; }
-[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p { color:var(--ink)!important; }
-[data-testid="stChatInput"] { background:#fff; border:1px solid #bed3eb; border-radius:16px; box-shadow:0 4px 16px rgba(26,73,124,.07); }
+[data-testid="stChatInput"] { background:#fff; border:1px solid #cbd5e1; border-radius:16px; box-shadow:0 8px 24px rgba(15,23,42,.07); }
+[data-testid="stChatInput"]:focus-within { border-color:var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
 [data-testid="stChatInput"] textarea { color:var(--ink)!important; }
-[data-testid="stSelectbox"] [data-baseweb="select"] > div { background:#fff; border-color:#bed3eb; border-radius:12px; }
-button[kind="primary"] { background:var(--blue)!important; border-color:var(--blue)!important; border-radius:10px!important; }
+[data-testid="stSelectbox"] [data-baseweb="select"] > div { background:#fff; border-color:#cbd5e1; border-radius:11px; }
+button[kind="primary"] { color:#fff!important; background:var(--black)!important; border-color:var(--black)!important; border-radius:10px!important; font-weight:650!important; }
 button[kind="primary"]:hover { background:var(--blue-dark)!important; border-color:var(--blue-dark)!important; }
+button[kind="secondary"] { color:#1e293b!important; border-color:#cbd5e1!important; border-radius:10px!important; }
 [data-testid="stExpander"] { background:#fff; border:1px solid var(--line); border-radius:14px; }
+[data-testid="stMetric"] { padding:.8rem 1rem; background:#fff; border:1px solid var(--line); border-radius:13px; }
+[data-testid="stMetricLabel"] { color:var(--muted)!important; font-size:.75rem!important; text-transform:uppercase; letter-spacing:.07em; }
+[data-testid="stMetricValue"] { color:var(--black)!important; font-weight:700; }
 hr { border-color:var(--line); }
+@media (max-width:700px) { .hero { padding:1.55rem 1.25rem; border-radius:17px; } .hero-copy { font-size:.94rem; } [data-testid="stMainBlockContainer"] { padding-top:1rem; } }
 </style>
 """, unsafe_allow_html=True)
-st.title("💻 VivoBook Manual Assistant")
-st.caption("A quick, model-aware guide to your ASUS laptop. Ask a question below; supporting manual pages are available under Sources.")
+st.markdown("""
+<section class="hero">
+  <div class="hero-kicker"><span class="hero-dot"></span> ASUS VIVOBOOK · PRODUCT KNOWLEDGE</div>
+  <h1>VivoBook Manual Assistant</h1>
+  <p class="hero-copy">A model-aware support assistant for setup, hardware details, and troubleshooting—grounded in the included ASUS manuals.</p>
+  <div class="hero-tags"><span>MANUAL-BASED ANSWERS</span><span>MODEL-AWARE SEARCH</span><span>OPTIONAL PAGE SOURCES</span></div>
+</section>
+""", unsafe_allow_html=True)
 st.session_state.setdefault("chat_history", [])
 
 with st.sidebar:
@@ -565,7 +583,7 @@ with st.sidebar:
         st.session_state.chat_history = []
         st.rerun()
     st.divider()
-    st.caption("The app answers from retrieved manual text and cites its sources. Optional: run Ollama locally and set OLLAMA_MODEL (default: llama3.2) for a more conversational summary.")
+    st.caption("Answers are grounded in retrieved manual text. Open Sources under a reply to inspect the supporting pages.")
 
 docs = load_index()
 if not docs and any(DATA_DIR.glob("*.pdf")):
@@ -588,9 +606,16 @@ if docs:
     active_docs = docs if model_filter == "All indexed models" else [
         doc for doc in docs if doc.get("model", doc["source"]) == model_filter
     ]
-    st.caption(f"Search scope: **{model_filter}** · {len(active_docs):,} manual passages")
-    st.subheader("Explore VivoBook models")
-    if st.toggle("Show product photos and buying details", value=False, key="show_product_catalog"):
+    st.caption(f"Search scope: **{model_filter}**")
+    status_cols = st.columns(3)
+    with status_cols[0]:
+        st.metric("Searchable passages", f"{len(active_docs):,}")
+    with status_cols[1]:
+        st.metric("Model families", f"{len(available_models)}")
+    with status_cols[2]:
+        st.metric("Answer mode", "Manual grounded")
+    st.subheader("Product catalog")
+    if st.toggle("Browse model photos and buying details", value=False, key="show_product_catalog"):
         products = load_products()
         if products:
             if model_filter == "All indexed models":
