@@ -132,6 +132,10 @@ class IngestionCacheTests(unittest.TestCase):
     def test_fingerprint_changes_when_source_or_chunk_settings_change(self) -> None:
         self.assertNotEqual(rag_core.file_fingerprint(b"one"), rag_core.file_fingerprint(b"two"))
         self.assertNotEqual(
+            rag_core.file_fingerprint(b"same bytes", source_name="ASUS_X1504.pdf"),
+            rag_core.file_fingerprint(b"same bytes", source_name="ASUS_X1605.pdf"),
+        )
+        self.assertNotEqual(
             rag_core.file_fingerprint(b"one", max_words=220),
             rag_core.file_fingerprint(b"one", max_words=240),
         )
@@ -150,6 +154,24 @@ class IngestionCacheTests(unittest.TestCase):
                 pdf.write_bytes(b"changed")
                 rag_core.cached_pdf_chunks(pdf, cache)
                 self.assertEqual(extract.call_count, 2)
+
+    def test_identical_pdf_bytes_under_different_names_keep_correct_metadata(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT / "tests") as directory:
+            root = Path(directory)
+            cache = root / "cache"
+            x1504 = root / "ASUS_VivoBook_X1504.pdf"
+            x1605 = root / "ASUS_VivoBook_X1405_X1505_X1605.pdf"
+            x1504.write_bytes(b"identical PDF bytes")
+            x1605.write_bytes(b"identical PDF bytes")
+            def extracted(_content: bytes, filename: str) -> list[dict]:
+                return [{"source": filename, "model": rag_core.model_from_filename(filename), "text": "manual content"}]
+            with patch("rag_core.extract_pdf_bytes", side_effect=extracted) as extract:
+                first = rag_core.cached_pdf_chunks(x1504, cache)
+                second = rag_core.cached_pdf_chunks(x1605, cache)
+            self.assertEqual(first[0]["source"], x1504.name)
+            self.assertEqual(second[0]["source"], x1605.name)
+            self.assertIn("X1605", second[0]["model"])
+            self.assertEqual(extract.call_count, 2)
 
     def test_rebuild_without_pdfs_preserves_existing_index(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT / "tests") as directory:
@@ -173,6 +195,20 @@ class IngestionCacheTests(unittest.TestCase):
             chunks, errors, preserved = rag_core.rebuild_documents([bad_pdf], index_path, root / "cache")
             self.assertEqual(chunks, existing)
             self.assertEqual(errors, ["broken.pdf"])
+            self.assertTrue(preserved)
+
+    def test_empty_extraction_does_not_evict_previous_manual(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT / "tests") as directory:
+            root = Path(directory)
+            index_path = root / "chunks.json"
+            existing = [{"text": "keep prior readable content", "source": "manual.pdf", "page": 1}]
+            index_path.write_text(json.dumps(existing), encoding="utf-8")
+            pdf = root / "manual.pdf"
+            pdf.write_bytes(b"replacement PDF")
+            with patch("rag_core.cached_pdf_chunks", return_value=[]):
+                chunks, errors, preserved = rag_core.rebuild_documents([pdf], index_path, root / "cache")
+            self.assertEqual(chunks, existing)
+            self.assertEqual(errors, ["manual.pdf"])
             self.assertTrue(preserved)
 
 
@@ -200,6 +236,12 @@ class GenerationAndConversationTests(unittest.TestCase):
         invalid = BytesIO(json.dumps({"response": "The laptop supports RTX graphics [1]."}).encode())
         with patch("rag_core.urlopen", return_value=invalid):
             self.assertIsNone(rag_core.generate_with_ollama("How do I enter BIOS?", self.results))
+
+    def test_citation_validation_rejects_unsupported_claims_and_uncited_sentences(self) -> None:
+        mixed_claim = "Press F2 to access BIOS during POST, and the battery is 99 Wh [1]."
+        self.assertFalse(rag_core.answer_is_valid(mixed_claim, 1, "How do I enter BIOS?", self.results))
+        uncited = "Press F2 to access BIOS during POST [1]. The battery is 99 Wh."
+        self.assertFalse(rag_core.answer_is_valid(uncited, 1, "How do I enter BIOS?", self.results))
 
     def test_prompt_treats_manual_and_history_as_untrusted_evidence(self) -> None:
         response = BytesIO(json.dumps({"response": "Press F2 to access BIOS [1]."}).encode())
