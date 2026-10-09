@@ -1,4 +1,3 @@
-Warning: fs was declared with const; use let for reassignable variables.
 from __future__ import annotations
 
 import json
