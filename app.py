@@ -11,7 +11,10 @@ from pathlib import Path
 import streamlit as st
 from rag_core import (
     DEFAULT_MIN_SCORE,
+    DEFAULT_BM25_B,
+    DEFAULT_BM25_K1,
     DEFAULT_TOP_K,
+    INDEX_FORMAT_VERSION,
     MAX_CONTEXT_CHARS,
     MAX_HISTORY_CHARS,
     MAX_HISTORY_MESSAGES,
@@ -46,6 +49,8 @@ def _bounded_setting(name: str, default: float, lower: float, upper: float, inte
 
 RETRIEVAL_TOP_K = _bounded_setting("RAG_TOP_K", DEFAULT_TOP_K, 1, 10, integer=True)
 RETRIEVAL_MIN_SCORE = _bounded_setting("RAG_MIN_SCORE", DEFAULT_MIN_SCORE, 0, 100)
+RETRIEVAL_BM25_K1 = _bounded_setting("RAG_BM25_K1", DEFAULT_BM25_K1, 0.1, 3)
+RETRIEVAL_BM25_B = _bounded_setting("RAG_BM25_B", DEFAULT_BM25_B, 0, 1)
 
 
 @st.cache_data
@@ -160,7 +165,13 @@ def search(query: str, docs: list[dict], limit: int = 5) -> list[tuple[float, di
     # The compiled BM25 index is private to this Streamlit session so uploaded
     # manuals never enter Streamlit's process-global cache.
     signature_input = json.dumps(
-        [(d.get("source"), d.get("page"), d.get("model"), d.get("text"), d.get("section")) for d in docs],
+        {
+            "index_version": INDEX_FORMAT_VERSION,
+            "documents": [
+                (d.get("source"), d.get("page"), d.get("model"), d.get("text"), d.get("section"))
+                for d in docs
+            ],
+        },
         ensure_ascii=False,
     ).encode("utf-8")
     signature = hashlib.sha256(signature_input).hexdigest()
@@ -169,7 +180,14 @@ def search(query: str, docs: list[dict], limit: int = 5) -> list[tuple[float, di
         cache[signature] = build_search_index(docs)
         while len(cache) > 3:
             cache.pop(next(iter(cache)))
-    return retrieve(query, cache[signature], top_k=limit, min_score=RETRIEVAL_MIN_SCORE)
+    return retrieve(
+        query,
+        cache[signature],
+        top_k=limit,
+        min_score=RETRIEVAL_MIN_SCORE,
+        bm25_k1=RETRIEVAL_BM25_K1,
+        bm25_b=RETRIEVAL_BM25_B,
+    )
 
 
 def is_battery_capacity_question(question: str) -> bool:
