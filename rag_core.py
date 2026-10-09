@@ -19,8 +19,13 @@ from urllib.request import Request, urlopen
 CHUNK_WORDS = 220
 CHUNK_OVERLAP_WORDS = 40
 CHUNKER_VERSION = "page-sections-v2"
+INDEX_FORMAT_VERSION = "bm25-tokenizer-v3"
 DEFAULT_TOP_K = 5
 DEFAULT_MIN_SCORE = 1.0
+DEFAULT_BM25_K1 = 1.5
+# The manuals use mostly fixed-size passages with short page-tail chunks. The
+# evaluation set preferred no passage-length normalization (b=0).
+DEFAULT_BM25_B = 0.0
 MAX_CONTEXT_CHARS = 8_000
 MAX_HISTORY_CHARS = 2_000
 MAX_HISTORY_MESSAGES = 4
@@ -34,6 +39,7 @@ STOP_WORDS = {
     "notebook", "pc", "spec", "specs", "specification", "specifications", "information", "about",
     "want", "need", "know", "me", "much", "many", "does", "doing", "doesn", "t", "the",
     "model", "family", "best", "safely", "long", "term", "exact", "please",
+    "list", "listed", "precaution", "precautions", "often", "advise", "advice", "recommended",
 }
 
 TOPIC_GROUPS = (
@@ -98,6 +104,8 @@ QUERY_EXPANSIONS: dict[str, set[str]] = {
     "connection": {"connect", "wireless", "wifi", "bluetooth"},
     "starts": {"start", "power", "button", "boot"},
     "starting": {"start", "power", "button", "boot"},
+    "force": {"hold", "shutdown", "button", "unresponsive"},
+    "prevent": {"avoid", "keep", "protect", "stop"},
 }
 
 BOILERPLATE_PATTERNS = tuple(re.compile(pattern, re.I) for pattern in (
@@ -131,6 +139,8 @@ CANONICAL_FORMS = {
     "increases": "increase", "decreases": "decrease",
     "launches": "launch",
     "settings": "setting", "indicators": "indicator", "lights": "light",
+    "recharged": "recharge", "recharging": "recharge",
+    "unused": "use", "using": "use", "uses": "use",
     "temperatures": "temperature", "gestures": "gesture",
 }
 
@@ -415,6 +425,18 @@ class BM25Index:
     average_length: float
 
 
+
+def _refs_matching_codes(doc: dict[str, Any], codes: set[str]) -> list[dict[str, Any]]:
+    """Return citations whose source/model metadata matches an exact code."""
+    refs = _source_refs(doc)
+    if not codes:
+        return refs
+    return [
+        ref for ref in refs
+        if any(code in str(ref.get(field) or "").lower() for code in codes for field in ("source", "model"))
+    ]
+
+
 def build_search_index(documents: list[dict[str, Any]]) -> BM25Index:
     """Tokenize once, collapse exact duplicate passages, and retain every citation."""
     unique: dict[str, dict[str, Any]] = {}
@@ -450,8 +472,10 @@ def retrieve(
     *,
     top_k: int = DEFAULT_TOP_K,
     min_score: float = DEFAULT_MIN_SCORE,
+    bm25_k1: float = DEFAULT_BM25_K1,
+    bm25_b: float = DEFAULT_BM25_B,
 ) -> list[tuple[float, dict[str, Any]]]:
-    if not index.documents or top_k <= 0:
+    if not index.documents or top_k <= 0 or bm25_k1 <= 0 or not 0 <= bm25_b <= 1:
         return []
     direct_list = tokens(query)
     direct = set(direct_list)
@@ -462,12 +486,13 @@ def retrieve(
 
     codes = explicit_model_codes(query)
     eligible = list(range(len(index.documents)))
+    matched_refs: dict[int, list[dict[str, Any]]] = {}
     if codes:
-        eligible = [i for i in eligible if any(
-            code in str(index.documents[i].get("model", "")).lower()
-            or code in str(index.documents[i].get("source", "")).lower()
-            for code in codes
-        )]
+        matched_refs = {
+            i: _refs_matching_codes(doc, codes)
+            for i, doc in enumerate(index.documents)
+        }
+        eligible = [i for i in eligible if matched_refs[i]]
         if not eligible:
             return []
 
@@ -479,11 +504,15 @@ def retrieve(
         tf = index.frequencies[idx]
         if not any(tf[term] for term in anchors) or not direct.intersection(tf):
             continue
+        # Model identifiers scope the candidate set; they are not evidence that
+        # a passage answers the question. Generic intent terms are removed by
+        # tokenization so a technical topic can survive the filter.
+        coverage_terms = direct - codes
         direct_coverage = sum(
-            1 for term in direct
+            1 for term in coverage_terms
             if tf[term] or any(tf[alias] for alias in QUERY_EXPANSIONS.get(term, ()))
         )
-        if len(direct) >= 2 and direct_coverage < math.ceil(len(direct) * 0.65):
+        if len(coverage_terms) >= 2 and direct_coverage < math.ceil(len(coverage_terms) * 0.65):
             continue
         length = len(index.tokenized[idx])
         score = 0.0
@@ -495,23 +524,40 @@ def retrieve(
             if term in direct:
                 matched_direct.add(term)
             idf = math.log(1 + (n_docs - index.document_frequency[term] + 0.5) / (index.document_frequency[term] + 0.5))
-            score += weight * idf * count * 2.5 / (count + 1.5 * (0.25 + 0.75 * length / max(index.average_length, 1)))
+            length_norm = 1 - bm25_b + bm25_b * length / max(index.average_length, 1)
+            score += weight * idf * count * (bm25_k1 + 1) / (count + bm25_k1 * length_norm)
         score += 1.25 * max(0, direct_coverage - 1)
         normalized_text = normalize_document_text(doc["text"])
         for phrase in query_bigrams:
             if len(phrase) > 4 and phrase in normalized_text:
                 score += 1.75
         # Exact model/SKU and technical token matches carry high discriminative value.
-        for code in codes:
-            if code in str(doc.get("model", "")).lower() or code in str(doc.get("source", "")).lower():
-                score += 2.0
+        if codes and matched_refs[idx]:
+            score += 2.0 * len(codes)
         if score >= min_score:
             scores.append((score, idx))
     scores.sort(key=lambda pair: pair[0], reverse=True)
     if not scores:
         return []
     cutoff = max(min_score, scores[0][0] * 0.20)
-    return [(score, index.documents[idx]) for score, idx in scores if score >= cutoff][:top_k]
+    results = []
+    for score, idx in scores:
+        if score < cutoff:
+            continue
+        doc = index.documents[idx]
+        if codes:
+            refs = matched_refs[idx]
+            # Narrow source citations to the selected model; otherwise an exact
+            # duplicate may cite the first, different family encountered.
+            doc = dict(doc)
+            doc["source_refs"] = refs
+            for field in ("source", "page", "model", "section"):
+                if refs[0].get(field) is not None:
+                    doc[field] = refs[0][field]
+        results.append((score, doc))
+        if len(results) >= top_k:
+            break
+    return results
 
 
 def build_context(results: list[tuple[float, dict[str, Any]]], max_chars: int = MAX_CONTEXT_CHARS) -> str:
@@ -633,5 +679,6 @@ def generate_with_ollama(
     except Exception:
         # The UI supplies an extractive answer from the same retrieved chunks.
         return None
+
 
 
