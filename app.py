@@ -541,6 +541,7 @@ p, label, [data-testid="stCaptionContainer"] { color:var(--muted); }
 .st-key-product_catalog [data-testid="stToggle"] [role="switch"][aria-checked="true"] { background:#3b82f6; }
 .st-key-product_catalog [data-testid="stVerticalBlockBorderWrapper"] { background:#fff; border-color:#dbe5f1; border-radius:15px; }
 .st-key-product_catalog [data-testid="stLinkButton"] a { background:#fff!important; color:#111827!important; border-color:#cbd5e1!important; }
+.st-key-product_catalog [data-testid="stLinkButton"] * { color:#111827!important; }
 [data-testid="stChatMessage"] { border:1px solid var(--line); border-radius:18px; padding:1.05rem 1.25rem; margin:1rem 0; background:#fff; box-shadow:0 7px 22px rgba(15,23,42,.045); }
 [data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] p { color:var(--ink)!important; line-height:1.75; }
 [class*="product-photo"] { height:220px; display:flex; align-items:center; justify-content:center; background:#f8fafc; border:1px solid var(--line); border-radius:14px; overflow:hidden; margin:.5rem 0 1rem; }
