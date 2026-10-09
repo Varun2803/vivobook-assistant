@@ -24,7 +24,7 @@ STOP_WORDS = {
     "for", "from", "how", "i", "in", "is", "it", "me", "my", "of", "on", "or",
     "laptop", "notebook", "pc", "please", "should", "the", "this", "to", "what", "when",
     "where", "which", "who", "why", "with", "would", "you", "your", "used",
-    "tell", "show", "give", "vivobook",
+    "tell", "show", "give", "vivobook", "asus", "spec", "specs", "specification", "specifications",
 }
 QUERY_EXPANSIONS = {
     "charge": {"charging", "charged", "charger", "battery", "adapter", "power"},
@@ -84,6 +84,45 @@ def show_product_card(product: dict) -> None:
             st.markdown(f"**{product['price']}**  ·  {product.get('rating', 'Rating unavailable')}")
         st.caption(product.get("price_note", "Specifications vary by exact configuration. Check the listing for current availability and price."))
         st.link_button("View product listing", product["url"], use_container_width=True)
+
+
+def product_specs_answer(question: str, model_filter: str, products: list[dict]) -> str | None:
+    """Answer broad specifications questions from the structured product catalog."""
+    if not re.search(r"\b(specs?|specifications?|configuration|configurations|hardware details)\b", question, re.I):
+        return None
+
+    question_lower = question.lower()
+    requested_codes = set(re.findall(r"\b(?:x|m|e|s)\d{3,4}[a-z0-9]*\b", question_lower))
+    # Users commonly call the E25362 family "Vivobook 16X" without knowing
+    # the exact X1605 model code.
+    if re.search(r"\b16\s*x\b", question_lower):
+        requested_codes.add("x1605")
+
+    candidates = []
+    if requested_codes:
+        candidates = [
+            product for product in products
+            if any(code in f"{product.get('family', '')} {product.get('sku', '')}".lower() for code in requested_codes)
+        ]
+    elif model_filter != "All indexed models":
+        candidates = [product for product in products if product.get("family", "").lower() in model_filter.lower()]
+        if re.search(r"\bvivobook\s+16\b", question_lower):
+            candidates = [product for product in candidates if "vivobook 16" in product.get("name", "").lower()]
+    elif re.search(r"\bvivobook\s+16\b", question_lower):
+        candidates = [product for product in products if "vivobook 16" in product.get("name", "").lower()]
+
+    if len(candidates) != 1:
+        if candidates:
+            return "I found more than one VivoBook 16 configuration. Choose the exact model family above (for example X1605 or M1605YA), then ask for its specifications."
+        return None
+
+    product = candidates[0]
+    lines = [f"**{product['name']} — {product.get('sku', product.get('family', 'representative configuration'))}**"]
+    lines.extend(f"- **{label}:** {value}" for label, value in product.get("specs", []))
+    lines.append("These are representative or maximum listed specifications; exact hardware depends on the full SKU.")
+    if product.get("url"):
+        lines.append(f"[View model details]({product['url']})")
+    return "\n\n".join(lines)
 
 
 def tokens(text: str) -> list[str]:
@@ -543,6 +582,7 @@ if question:
         st.write(question)
 
     results = search(question, active_docs)
+    catalog_answer = product_specs_answer(question, model_filter, load_products())
     capacity_question = is_battery_capacity_question(question)
     capacity_specs = find_battery_capacity_specs(active_docs) if capacity_question else []
     adapter_power_question = is_adapter_power_question(question)
@@ -565,6 +605,9 @@ if question:
         answer_text = adapter_power_answer(adapter_specs, model_filter)
     elif adapter_power_question:
         answer_text = "The selected manual does not state a numeric power-adapter wattage. Check the label on the adapter supplied with your exact laptop model."
+    elif catalog_answer:
+        results = []
+        answer_text = catalog_answer
     elif not results:
         answer_text = unsupported_spec_answer(question, model_filter)
         if not answer_text:
